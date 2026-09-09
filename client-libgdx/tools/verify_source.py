@@ -174,6 +174,14 @@ check('battle Q/E softkeys exist', 'this.left = new Command("Item"' in gs and 't
 check('battle item grid uses WASD + Space', 'handleDesktopItemSelector()' in gs and 'useSelectedItemFromKeyboard()' in gs and 'CCanvas.keyReleased[5]' in gs)
 check('battle pause menu uses W/S Space Q E', 'handleKeyboardInput()' in pause and 'CCanvas.keyPressed[13]' in pause and 'CCanvas.keyPressed[12]' in pause)
 check('Hybrid room selection requests cmd7 area list', '!this.isEmptyRoom' in room2 and 'GameService.gI().requestBoardList(info.id)' in room2)
+board = text('core/src/screen/BoardListScr.java')
+check('room list starts on PvP Room 0', 'this.selected = this.roomList.size() > 0 ? 0 : -1;' in room2)
+check('room list W/S keyboard navigation exists', 'updateKeyboardSelection()' in room2 and 'CCanvas.keyPressed[2]' in room2 and 'CCanvas.keyPressed[8]' in room2)
+check('room list A/D page navigation exists', 'CCanvas.keyPressed[4]' in room2 and 'CCanvas.keyPressed[6]' in room2)
+check('area list W/S keyboard navigation exists', 'updateKeyboardSelection()' in board and 'CCanvas.keyPressed[2]' in board and 'CCanvas.keyPressed[8]' in board)
+check('area list A/D page navigation exists', 'CCanvas.keyPressed[4]' in board and 'CCanvas.keyPressed[6]' in board)
+check('area list E returns to room list without mouse', 'CCanvas.roomListScr2.show();' in board and 'private void doExitBoardList()' in board)
+check('area list camera clamps short lists', 'if (cmyLim < 0)' in board and 'cmyLim = 0;' in board)
 
 failed = [n for n, ok, _ in checks if not ok]
 print(f'\nSUMMARY: {len(checks)-len(failed)}/{len(checks)} checks PASS')

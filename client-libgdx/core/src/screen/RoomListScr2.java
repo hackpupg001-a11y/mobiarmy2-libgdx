@@ -240,8 +240,47 @@ public class RoomListScr2 extends CScreen {
 
    }
 
+   private void updateKeyboardSelection() {
+      if (this.roomList == null || this.roomList.size() == 0) {
+         return;
+      }
+
+      int oldSelected = this.selected;
+      if (CCanvas.keyPressed[2]) {
+         CCanvas.keyPressed[2] = false;
+         this.selected--;
+         if (this.selected < 0) {
+            this.selected = this.roomList.size() - 1;
+         }
+      } else if (CCanvas.keyPressed[8]) {
+         CCanvas.keyPressed[8] = false;
+         this.selected++;
+         if (this.selected >= this.roomList.size()) {
+            this.selected = 0;
+         }
+      } else if (CCanvas.keyPressed[4]) {
+         CCanvas.keyPressed[4] = false;
+         this.selected = Math.max(0, this.selected - 5);
+      } else if (CCanvas.keyPressed[6]) {
+         CCanvas.keyPressed[6] = false;
+         this.selected = Math.min(this.roomList.size() - 1, this.selected + 5);
+      }
+
+      if (oldSelected != this.selected) {
+         int tam = CCanvas.isTouch ? 40 : ITEM_HEIGHT;
+         this.cmtoY = this.selected * tam - (CCanvas.hh - 2 * ITEM_HEIGHT);
+         if (this.cmtoY < 0) {
+            this.cmtoY = 0;
+         }
+         if (this.cmtoY > this.cmyLim) {
+            this.cmtoY = this.cmyLim;
+         }
+      }
+   }
+
    public void update() {
       super.update();
+      this.updateKeyboardSelection();
       Cloud.updateCloud();
    }
 
@@ -257,7 +296,9 @@ public class RoomListScr2 extends CScreen {
 
    private void setCam() {
       this.cmy = this.cmtoY = 0;
-      this.selected = 1;
+      // Start on the first actual room. In this server Room 0 is normal PvP;
+      // starting at index 1 made the desktop client look like it only had bosses.
+      this.selected = this.roomList.size() > 0 ? 0 : -1;
       int tam = CCanvas.isTouch ? 40 : ITEM_HEIGHT;
       this.cmyLim = this.roomList.size() * tam - (CCanvas.hieght - 70 - this.hTab);
       if (this.cmyLim < 0) {

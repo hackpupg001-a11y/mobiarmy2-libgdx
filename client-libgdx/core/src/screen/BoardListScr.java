@@ -110,6 +110,14 @@ public class BoardListScr extends CScreen {
    }
 
    private void doExitBoardList() {
+      // E/right-softkey must work without a mouse click. Return to the cached
+      // top-level room list; refresh from the server only if that screen is gone.
+      if (CCanvas.roomListScr2 != null) {
+         CCanvas.roomListScr2.show();
+      } else {
+         GameService.gI().requestRoomList();
+         CCanvas.startWaitDlg(Language.pleaseWait());
+      }
    }
 
    private void doUpdate() {
@@ -175,7 +183,46 @@ public class BoardListScr extends CScreen {
 
    }
 
+   private void updateKeyboardSelection() {
+      if (boardList == null || boardList.size() == 0) {
+         return;
+      }
+
+      int oldSelected = selected;
+      if (CCanvas.keyPressed[2]) {
+         CCanvas.keyPressed[2] = false;
+         selected--;
+         if (selected < 0) {
+            selected = boardList.size() - 1;
+         }
+      } else if (CCanvas.keyPressed[8]) {
+         CCanvas.keyPressed[8] = false;
+         selected++;
+         if (selected >= boardList.size()) {
+            selected = 0;
+         }
+      } else if (CCanvas.keyPressed[4]) {
+         CCanvas.keyPressed[4] = false;
+         selected = Math.max(0, selected - 5);
+      } else if (CCanvas.keyPressed[6]) {
+         CCanvas.keyPressed[6] = false;
+         selected = Math.min(boardList.size() - 1, selected + 5);
+      }
+
+      if (oldSelected != selected) {
+         int tam = CCanvas.isTouch ? 40 : ITEM_HEIGHT;
+         cmtoY = selected * tam - (CCanvas.hh - 2 * ITEM_HEIGHT);
+         if (cmtoY < 0) {
+            cmtoY = 0;
+         }
+         if (cmtoY > cmyLim) {
+            cmtoY = cmyLim;
+         }
+      }
+   }
+
    public void update() {
+      this.updateKeyboardSelection();
       Cloud.updateCloud();
       this.moveCamera();
       if (isOpenBox && this.xList > 0) {
@@ -249,5 +296,8 @@ public class BoardListScr extends CScreen {
       int tam = CCanvas.isTouch ? 40 : ITEM_HEIGHT;
       int aa = CCanvas.isTouch ? 5 : 0;
       cmyLim = BoardListScr.boardList.size() * tam - (CCanvas.hieght - ITEM_HEIGHT * 4 - aa);
+      if (cmyLim < 0) {
+         cmyLim = 0;
+      }
    }
 }
