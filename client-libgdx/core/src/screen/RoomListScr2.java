@@ -112,7 +112,7 @@ public class RoomListScr2 extends CScreen {
    }
 
    private void doUpdate() {
-      GameService.gI().requestEmptyRoom((byte)0, (byte)-1, (String)null);
+      GameService.gI().requestRoomList();
       CCanvas.startWaitDlg(Language.pleaseWait());
    }
 

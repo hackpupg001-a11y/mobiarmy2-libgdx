@@ -565,7 +565,7 @@ public class MenuScr extends CScreen {
          this.hide = true;
          if (curMenuSelect == MENU_CHOINGAY) {
             if (this.select == 0) {
-               GameService.gI().requestEmptyRoom((byte)0, (byte)-1, (String)null);
+               GameService.gI().requestRoomList();
             } else {
                this.doPlayNow((byte)this.select);
             }

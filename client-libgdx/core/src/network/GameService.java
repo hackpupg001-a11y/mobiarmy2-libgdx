@@ -45,7 +45,13 @@ public class GameService {
     }
 
     public void requestRoomList() {
-        this.requestEmptyRoom((byte) 0, (byte) -1, (String) null);
+        // Hybrid server is the classic 2.3 protocol: client cmd 6 asks for the
+        // room list. Upstream desktop 2.4 changed this flow to cmd -28, which
+        // Hybrid intentionally does not handle and therefore left "Vui lòng chờ"
+        // on screen forever.
+        Message m = new Message((byte) 6);
+        this.session.sendMessage(m);
+        m.cleanup();
     }
 
     public void requestBoardList(byte id) {
@@ -62,23 +68,34 @@ public class GameService {
     }
 
     public void requestEmptyRoom(byte type, byte level, String id) {
-        CRes.out("=========> Gameservice request empty room type = " + type + " lv = " + level + " id = " + id);
-        Message m = new Message((byte) -28);
+        CRes.out("=========> Hybrid 2.3 room request type = " + type + " lv = " + level + " id = " + id);
 
-        try {
-            m.writer().writeByte(type);
-            if (type == 1) {
-                m.writer().writeByte(level);
-            }
-
-            if (type == 2) {
-                m.writer().writeUTF(id);
-            }
-        } catch (IOException var6) {
+        // Compatibility bridge for calls inherited from the 2.4 desktop source.
+        if (type == 0) {
+            requestRoomList();
+            return;
         }
 
-        this.session.sendMessage(m);
-        m.cleanup();
+        if (type == 2 && id != null) {
+            try {
+                int encoded = Integer.parseInt(id);
+                int room = encoded / 1000;
+                int zone = encoded % 1000;
+                if (room >= 0 && room <= 127 && zone >= 0 && zone <= 127) {
+                    joinBoard((byte) room, (byte) zone, "");
+                    return;
+                }
+            } catch (NumberFormatException ignored) {
+                // Fall through to a visible error instead of sending unsupported -28.
+            }
+            CCanvas.endDlg();
+            CCanvas.startOKDlg("Số phòng/khu vực không hợp lệ.");
+            return;
+        }
+
+        // type 1 (2.4 create-zone protocol) has no equivalent in the 2.3 server.
+        // Refresh the real room list rather than sending an unsupported packet.
+        requestRoomList();
     }
 
     public void joinBoard(byte roomID, byte boardID, String pass) {
@@ -108,16 +125,7 @@ public class GameService {
     }
 
     public void changeMODE(byte MODE_TYPE) {
-        Message m = new Message((byte) 73);
-
-        try {
-            m.writer().writeByte(MODE_TYPE);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
-        CRes.out("GUI M - CHANGE_MODE: " + (MODE_TYPE == 0 ? "TEAM_MODE" : "FREE_MODE"));
+        // 2.4-only packet 73. Hybrid 2.3 has no matching handler.
     }
 
     public void leaveBoard() {
@@ -201,40 +209,17 @@ public class GameService {
     }
 
     public void checkFall(byte id, boolean isLand) {
-        Message m = new Message((byte) 80);
-
-        try {
-            m.writer().writeByte(id);
-            m.writer().writeBoolean(isLand);
-        } catch (IOException var5) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // 2.4-only packet 80. Hybrid server is authoritative for landing/fall state.
     }
 
     public void requestRichest(int page) {
-        Message m = new Message((byte) 31);
-
-        try {
-            m.writer().writeByte(page);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Classic Hybrid rankings are served through cmd -14.
+        bangxephang((byte) 0, page);
     }
 
     public void requestStrongest(int page) {
-        Message m = new Message((byte) 30);
-
-        try {
-            m.writer().writeByte(page);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Classic Hybrid rankings are served through cmd -14.
+        bangxephang((byte) 1, page);
     }
 
     public void requestRegister(String username, String accLogin, String pass) {
@@ -252,17 +237,9 @@ public class GameService {
     }
 
     public void requestRegister3(String username, String pass, String version) {
-        Message m = new Message((byte) -93);
-
-        try {
-            m.writer().writeUTF(username);
-            m.writer().writeUTF(pass);
-            m.writer().writeUTF(version);
-        } catch (IOException var6) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // 2.4 registration packet is unsupported; registration is handled by the Hybrid web UI.
+        CCanvas.endDlg();
+        CCanvas.startOKDlg("Đăng ký tài khoản tại web Hybrid.");
     }
 
     public void requestFriendList() {
@@ -308,15 +285,7 @@ public class GameService {
     }
 
     public void requestAvatar(short avatar) {
-        Message m = new Message((byte) 38);
-
-        try {
-            m.writer().writeShort(avatar);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Legacy social-avatar service is not part of the Hybrid 2.3 server.
     }
 
     public void chatTo(int iddb, String text) {
@@ -333,66 +302,27 @@ public class GameService {
     }
 
     public void requestUserData() {
-        Message m = new Message((byte) 40);
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Legacy social profile service is not part of the Hybrid 2.3 server.
     }
 
     public void ping(int a, long b) {
-        Message m = new Message((byte) 42);
-
-        try {
-            m.writer().writeInt(a);
-            MessageHandler.timePing = mSystem.currentTimeMillis();
-        } catch (IOException var6) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Hybrid 2.3 has no client cmd 42 ping. TCP/session state is tracked locally.
     }
 
     public void requestAvatarShop() {
-        Message m = new Message((byte) 39);
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Legacy avatar shop service is not part of the Hybrid 2.3 server.
     }
 
     public void updateDateProfile(UserData userData) {
-        Message m = new Message((byte) 41);
-
-        try {
-            m.writer().writeUTF(userData.fullname);
-            m.writer().writeByte(userData.gender);
-            m.writer().writeInt(userData.birthYear);
-            m.writer().writeUTF(userData.address);
-            m.writer().writeUTF(userData.idnumber);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Legacy profile service is not part of the Hybrid 2.3 server.
     }
 
     public void buyAvatar(short id) {
-        Message m = new Message((byte) 43);
-
-        try {
-            m.writer().writeShort(id);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
+        // Legacy avatar service is not part of the Hybrid 2.3 server.
     }
 
     public void setProvider(byte provider) {
-        Message m = new Message((byte) 58);
-
-        try {
-            m.writer().writeByte(1);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
+        // 2.4 provider handshake (cmd 58) is intentionally skipped on Hybrid 2.3.
     }
 
     public void requestChargeMoneyInfo2(byte type, String id) {
@@ -445,14 +375,7 @@ public class GameService {
     }
 
     public void sendAdminCommand(String cmd) {
-        Message m = new Message((byte) 47);
-
-        try {
-            m.writer().writeUTF(cmd);
-        } catch (IOException var4) {
-        }
-
-        this.session.sendMessage(m);
+        // No remote admin command exists in the Hybrid game protocol.
     }
 
     public void startGame() {
@@ -648,16 +571,8 @@ public class GameService {
     }
 
     public void selectMap(byte map) {
-        Message m = new Message((byte) 70);
-
-        try {
-            m.writer().writeByte(map);
-        } catch (Exception var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
-        CRes.out("SendM ChangeMap " + map);
+        // Desktop 2.4 used cmd 70; Hybrid 2.3 uses cmd 75 with the same map byte.
+        mapSelect(map);
     }
 
     public void changeTeam() {
@@ -732,54 +647,21 @@ public class GameService {
     }
 
     public void requestService(byte service, String arg) {
-        if (arg == null) {
-            arg = "";
-        }
-
-        Message m = new Message((byte) 85);
-
-        try {
-            m.writer().writeByte(service);
-            m.writer().writeUTF(arg);
-        } catch (Exception var5) {
-            var5.printStackTrace();
-        }
-
-        this.session.sendMessage(m);
+        // 2.4 carrier/service packet is unsupported by Hybrid 2.3.
+        CCanvas.endDlg();
+        CCanvas.startOKDlg("Tính năng này không dùng trên máy chủ Hybrid.");
     }
 
     public void zingConnect(String user, String key, byte bigProvider, String version) {
-        Message m = new Message((byte) 87);
-
-        try {
-            m.writer().writeUTF(user);
-            m.writer().writeUTF(key);
-            m.writer().write(bigProvider);
-            m.writer().writeUTF(version);
-        } catch (Exception var7) {
-            var7.printStackTrace();
-        }
-
-        this.session.sendMessage(m);
+        // Legacy third-party login is not part of the Hybrid 2.3 server.
     }
 
     public void getString(String str) {
-        Message m = new Message((byte) 127);
-
-        try {
-            CRes.out("STRING = " + str);
-            m.writer().writeUTF(str);
-        } catch (Exception var4) {
-            var4.printStackTrace();
-        }
-
-        this.session.sendMessage(m);
+        // 2.4 provider/agent packet 127 is not used by Hybrid 2.3.
     }
 
     public void getProviderAgent() {
-        CRes.out("=====> get provider and agent");
-        Message m = new Message((byte) -26);
-        this.session.sendMessage(m);
+        // 2.4 provider/agent packet -26 is not used by Hybrid 2.3.
     }
 
     public void sendVersion(byte type, byte version) {
@@ -984,15 +866,7 @@ public class GameService {
     }
 
     public void chatTeam(String mess) {
-        Message m = new Message((byte) 123);
-
-        try {
-            m.writer().writeUTF(mess);
-        } catch (Exception var4) {
-            var4.printStackTrace();
-        }
-
-        this.session.sendMessage(m);
+        // 2.4 team-chat packet 123 is not implemented by this Hybrid server.
     }
 
     public void getMaterialIcon(byte action, int id, int index) {
@@ -1082,8 +956,7 @@ public class GameService {
     }
 
     public void changeRoomName() {
-        Message m = new Message((byte) -19);
-        this.session.sendMessage(m);
+        // 2.4 room-name sync packet -19 is not implemented by Hybrid 2.3.
     }
 
     public void getShopBietDoi(byte action, byte money, byte id) {
@@ -1172,25 +1045,7 @@ public class GameService {
     }
 
     public void holeInfo(Vector holeInfo) {
-        if (!CCanvas.isDebugging()) {
-            Message m = new Message((byte) -92);
-
-            try {
-                m.writer().writeByte(holeInfo.size());
-
-                for (int i = 0; i < holeInfo.size(); ++i) {
-                    HoleInfo hole = (HoleInfo) holeInfo.elementAt(i);
-                    m.writer().writeShort(hole.mapID);
-                    m.writer().writeShort(hole.x);
-                    m.writer().writeShort(hole.y);
-                    m.writer().writeByte(hole.holeType);
-                }
-            } catch (IOException var5) {
-            }
-
-            this.session.sendMessage(m);
-            m.cleanup();
-        }
+        // 2.4 terrain-hole sync packet -92 is not used; Hybrid server owns fight state.
     }
 
     public void debugServer() {
@@ -1215,35 +1070,11 @@ public class GameService {
     }
 
     public void onSendChangeRequest(String charName) {
-        Message m = new Message((byte) -103);
-
-        try {
-            m.writer().writeUTF(charName);
-        } catch (Exception var4) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        CCanvas.endDlg();
+        CCanvas.startOKDlg("Đổi tên nhân vật không được hỗ trợ bởi giao thức Hybrid 2.3.");
     }
 
     public void onInApppurchaseToServer(String product_ID, String token) {
-        if (product_ID == null) {
-            product_ID = "Ko co product ID";
-        }
-
-        if (token == null) {
-            token = "Ko co product token";
-        }
-
-        Message m = new Message((byte) -102);
-
-        try {
-            m.writer().writeUTF(product_ID);
-            m.writer().writeUTF(token);
-        } catch (Exception var5) {
-        }
-
-        this.session.sendMessage(m);
-        m.cleanup();
+        // Mobile in-app purchase packet -102 is disabled on desktop Hybrid.
     }
 }

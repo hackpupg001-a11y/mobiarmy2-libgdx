@@ -15,6 +15,8 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
+import java.util.HashSet;
+import java.util.Set;
 import coreLG.CCanvas;
 import effect.Camera;
 import model.CRes;
@@ -89,6 +91,11 @@ public class MainGame implements ApplicationListener {
     }
 
     public void render() {
+        // Windows/LWJGL may briefly expose a zero-sized framebuffer while a
+        // window is being minimized. Never run the old mobile renderer against it.
+        if (Gdx.graphics.getWidth() <= 1 || Gdx.graphics.getHeight() <= 1) {
+            return;
+        }
         if (!isPause) {
             this.errrender = 0;
             Gdx.gl.glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
@@ -248,15 +255,21 @@ public class MainGame implements ApplicationListener {
 
     public void pause() {
         this.timeRunInBackGround = mSystem.currentTimeMillis();
-        isPause = true;
         if (this.inputProcessor != null) {
             this.inputProcessor.releaseDesktopControls();
         }
         CCanvas.clearKeyHold();
+
+        // LWJGL3 may deliver pause/resume around focus/minimize transitions.
+        // The old mobile lifecycle flag could leave the desktop client permanently
+        // paused (or make it look as if it crashed) after restoring the window.
+        // Desktop keeps its own game/network state alive; mobile keeps legacy pause.
+        isPause = !CCanvas.isPc();
     }
 
     public void resume() {
         isPause = false;
+        CCanvas.clearKeyHold();
     }
 
     public void dispose() {
@@ -376,6 +389,7 @@ public class MainGame implements ApplicationListener {
     private class MyInputProcessor implements InputProcessor {
         int zoomIn;
         private boolean spaceDown;
+        private final Set<Integer> desktopKeysDown = new HashSet<Integer>();
 
         private MyInputProcessor() {
             this.zoomIn = 1;
@@ -383,7 +397,20 @@ public class MainGame implements ApplicationListener {
         }
 
         private void releaseDesktopControls() {
+            if (GameMidlet.gameCanvas != null) {
+                if (this.spaceDown) {
+                    GameMidlet.gameCanvas.keyReleased(-5);
+                }
+                for (Integer keycode : this.desktopKeysDown) {
+                    int mapped = mapDesktopControl(keycode.intValue());
+                    if (mapped != 0) {
+                        GameMidlet.gameCanvas.keyReleased(mapped);
+                    }
+                }
+            }
             this.spaceDown = false;
+            this.desktopKeysDown.clear();
+            MainGame.keyHold = -1;
         }
 
         public boolean scrolled(int amount) {
@@ -435,7 +462,11 @@ public class MainGame implements ApplicationListener {
                 if (desktopControlMode()) {
                     int desktopMapped = mapDesktopControl(keycode);
                     if (desktopMapped != 0) {
-                        GameMidlet.gameCanvas.keyPressed(desktopMapped);
+                        // Ignore OS key-repeat. A physical key gets one J2ME press
+                        // and one release even if the press changes the current screen.
+                        if (this.desktopKeysDown.add(Integer.valueOf(keycode))) {
+                            GameMidlet.gameCanvas.keyPressed(desktopMapped);
+                        }
                         return true;
                     }
                 }
@@ -461,13 +492,13 @@ public class MainGame implements ApplicationListener {
                     MainGame.keyHold = -1;
                     return true;
                 }
-                if (desktopControlMode()) {
-                    int desktopMapped = mapDesktopControl(keycode);
-                    if (desktopMapped != 0) {
-                        GameMidlet.gameCanvas.keyReleased(desktopMapped);
-                        MainGame.keyHold = -1;
-                        return true;
-                    }
+                int desktopMapped = mapDesktopControl(keycode);
+                if (desktopMapped != 0 && this.desktopKeysDown.remove(Integer.valueOf(keycode))) {
+                    // Release based on the physical key that went down, not on the
+                    // *new* screen. E/Q often change screens before keyUp arrives.
+                    GameMidlet.gameCanvas.keyReleased(desktopMapped);
+                    MainGame.keyHold = -1;
+                    return true;
                 }
             }
 
@@ -486,9 +517,11 @@ public class MainGame implements ApplicationListener {
         }
 
         public boolean keyTyped(char character) {
-            if (desktopControlMode() && isDesktopControlCharacter(character)) {
+            if (isDesktopControlCharacter(character)
+                    && (desktopControlMode() || !this.desktopKeysDown.isEmpty())) {
                 // keyDown already delivered this physical key as a D-pad/soft-key
-                // action. Do not also inject the printable letter into the game.
+                // action. Suppress the printable event even if that keyDown changed
+                // screens (for example E -> Back -> LoginScr before keyTyped arrives).
                 return true;
             }
             if (GameMidlet.gameCanvas != null && character > 32 && character != 127) {

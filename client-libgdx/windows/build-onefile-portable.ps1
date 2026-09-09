@@ -46,15 +46,25 @@ internal static class OneFileBootstrap
 {
     private const string CacheKey = "$cacheKey";
     private const string ResourceName = "Payload.Zip";
+    private const string MarkerName = ".payload-ok";
 
     [STAThread]
     private static int Main(string[] args)
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string cacheRoot = Path.Combine(local, "WorkspaceCache", CacheKey);
+        EnsurePayload(cacheRoot);
+
         string appDir = Path.Combine(cacheRoot, "DataViewer");
         string appExe = Path.Combine(appDir, "DataViewer.exe");
+        // Once the JVM process starts, its lifetime belongs to the application.
+        // Do not delete/rebuild the runtime and relaunch merely because the child
+        // exits: a minimize/render crash must not be misreported as a JVM-launch failure.
+        return Launch(appExe, appDir, args);
+    }
 
+    private static void EnsurePayload(string cacheRoot)
+    {
         using (var mutex = new Mutex(false, @"Local\WorkspaceDataOneFile_" + CacheKey))
         {
             bool owns = false;
@@ -63,19 +73,39 @@ internal static class OneFileBootstrap
                 try { owns = mutex.WaitOne(TimeSpan.FromMinutes(3)); }
                 catch (AbandonedMutexException) { owns = true; }
                 if (!owns) throw new TimeoutException("Timed out waiting for portable cache initialization.");
-
-                if (!File.Exists(appExe))
-                    ExtractPayload(cacheRoot);
+                if (!IsCacheValid(cacheRoot)) ExtractPayload(cacheRoot);
             }
             finally
             {
                 if (owns) mutex.ReleaseMutex();
             }
         }
+    }
 
-        if (!File.Exists(appExe))
-            throw new FileNotFoundException("Embedded application did not extract correctly.", appExe);
+    private static bool IsCacheValid(string cacheRoot)
+    {
+        try
+        {
+            string appDir = Path.Combine(cacheRoot, "DataViewer");
+            string marker = Path.Combine(cacheRoot, MarkerName);
+            string appExe = Path.Combine(appDir, "DataViewer.exe");
+            string appCfg = Path.Combine(appDir, "app", "DataViewer.cfg");
+            string jvmDll = Path.Combine(appDir, "runtime", "bin", "server", "jvm.dll");
+            return File.Exists(appExe)
+                && File.Exists(appCfg)
+                && File.Exists(jvmDll)
+                && File.Exists(marker)
+                && String.Equals(File.ReadAllText(marker).Trim(), CacheKey, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
+    private static int Launch(string appExe, string appDir, string[] args)
+    {
+        if (!File.Exists(appExe)) throw new FileNotFoundException("Portable launcher is missing.", appExe);
         var psi = new ProcessStartInfo
         {
             FileName = appExe,
@@ -112,9 +142,14 @@ internal static class OneFileBootstrap
 
             ZipFile.ExtractToDirectory(zipPath, staging);
 
-            string stagedExe = Path.Combine(staging, "DataViewer", "DataViewer.exe");
-            if (!File.Exists(stagedExe)) throw new InvalidDataException("Portable payload is missing DataViewer.exe.");
+            string stagedApp = Path.Combine(staging, "DataViewer");
+            string stagedExe = Path.Combine(stagedApp, "DataViewer.exe");
+            string stagedCfg = Path.Combine(stagedApp, "app", "DataViewer.cfg");
+            string stagedJvm = Path.Combine(stagedApp, "runtime", "bin", "server", "jvm.dll");
+            if (!File.Exists(stagedExe) || !File.Exists(stagedCfg) || !File.Exists(stagedJvm))
+                throw new InvalidDataException("Portable payload is missing launcher/config/JVM runtime files.");
 
+            File.WriteAllText(Path.Combine(staging, MarkerName), CacheKey, Encoding.ASCII);
             if (Directory.Exists(cacheRoot)) Directory.Delete(cacheRoot, true);
             Directory.Move(staging, cacheRoot);
         }

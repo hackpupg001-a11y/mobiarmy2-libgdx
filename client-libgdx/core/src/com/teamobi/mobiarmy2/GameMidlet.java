@@ -31,8 +31,8 @@ import screen.ServerListScreen;
 public class GameMidlet extends MIDlet implements IActionListener {
     public static GameMidlet instance = new GameMidlet();
     public static CCanvas gameCanvas;
-    public static String version = "2.4.1";
-    public static short versionByte = 241;
+    public static String version = "2.3.0";
+    public static short versionByte = 230;
     public static byte versioncode = 11;
     public static byte server = -2;
     public static String serverName;

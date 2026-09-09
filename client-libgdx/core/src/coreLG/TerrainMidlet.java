@@ -19,7 +19,7 @@ import network.Session_ME;
 import screen.ServerListScreen;
 
 public class TerrainMidlet {
-    public static final String version = "2.4.1";
+    public static final String version = "2.3.0";
     public static byte PROVIDER;
     public static final byte BIG_PROVIDER = 0;
     public static TemCanvas temCanvas;

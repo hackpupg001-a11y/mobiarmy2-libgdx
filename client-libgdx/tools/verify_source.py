@@ -72,6 +72,16 @@ check('focus loss clears stuck keyboard state', 'CCanvas.clearKeyHold();' in mai
 check('desktop control letters are suppressed from keyTyped outside text entry', 'isDesktopControlCharacter(character)' in main)
 check('login/input dialog preserve text typing', 'CCanvas.curScr instanceof LoginScr' in main and 'CCanvas.currentDialog instanceof InputDlg' in main)
 
+check('desktop mapped keys release even after screen changes', 'desktopKeysDown.remove(Integer.valueOf(keycode))' in main and 'Release based on the physical key that went down' in main)
+check('desktop pause does not latch on PC', 'isPause = !CCanvas.isPc();' in main)
+launcher = text('desktop/src/com/mygdx/game/DesktopLauncher.java')
+check('desktop minimizes safely without losing focus lifecycle', 'setPauseWhenMinimized(true)' in launcher and 'setPauseWhenLostFocus(false)' in launcher)
+check('desktop crash log is written on fatal launcher error', 'DataViewer-crash.log' in launcher and 'writeCrashLog' in launcher)
+check('Hybrid 2.3 room list uses client command 6', 'public void requestRoomList()' in svc and 'new Message((byte) 6)' in svc)
+check('unsupported 2.4 room-list command is not sent', 'new Message((byte) -28)' not in svc)
+check('encoded find-room bridges to classic joinBoard', 'encoded / 1000' in svc and 'joinBoard((byte) room, (byte) zone, "")' in svc)
+check('room packet parse failures close wait dialog', 'Lỗi dữ liệu phòng (cmd ' in text('core/src/network/MessageHandler.java'))
+
 cp = text('core/src/player/CPlayer.java')
 check('angleReset bypasses lock in 360 mode', 'public void angleReset()' in cp and 'if (ModSettings.angle360)' in cp)
 check('normal-shoot clamp bypasses lock in 360 mode', 'this.angle = ModSettings.normalize360(this.angle);' in cp)
@@ -125,6 +135,32 @@ check('one-file builder no longer uses fragile IExpress', 'iexpress' not in onef
 check('one-file builder embeds jpackage payload in C# bootstrapper', 'OneFileBootstrap.cs' in onefile and '/resource:' in onefile and 'Payload.Zip' in onefile)
 check('one-file cache is payload-hash versioned', 'Get-FileHash $payload -Algorithm SHA256' in onefile and 'WorkspaceCache' in onefile)
 
+# FIX10: hard protocol/JVM/window gates.
+server23_client_cmds = {
+    -27, -25, -23, -21, -18, -17, -14, -12, -6, -4, -3, -2,
+    1, 5, 6, 7, 8, 9, 11, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 28,
+    29, 32, 33, 34, 36, 49, 53, 54, 56, 68, 69, 71, 72, 74, 75, 77, 78,
+    79, 81, 83, 84, 90, 98, 99, 102, 103, 104, 110, 114, 115, 116, 117,
+    118, 120, 121, 122, 126,
+}
+static_sends = []
+for source in CORE.rglob('*.java'):
+    body = source.read_text(encoding='utf-8', errors='replace')
+    for match in re.finditer(r'new\s+Message\s*\(\s*(?:\(byte\)\s*)?(-?\d+)\s*\)', body):
+        static_sends.append((int(match.group(1)), source))
+unsupported_static = sorted({cmd for cmd, _ in static_sends if cmd not in server23_client_cmds})
+check('all statically-sent client commands exist in Hybrid 2.3 server handler', not unsupported_static, str(unsupported_static))
+check('client advertises Hybrid 2.3.0 instead of upstream 2.4.1', 'version = "2.3.0"' in text('core/src/com/teamobi/mobiarmy2/GameMidlet.java') and 'versionByte = 230' in text('core/src/com/teamobi/mobiarmy2/GameMidlet.java') and '2.4.1' not in all_java)
+check('2.4 provider/agent startup packets are neutralized', 'new Message((byte) 58)' not in svc and 'new Message((byte) 127)' not in svc and 'new Message((byte) -26)' not in svc)
+check('2.4 room-name and terrain-hole packets are neutralized', 'new Message((byte) -19)' not in svc and 'new Message((byte) -92)' not in svc)
+check('2.4 map command 70 bridges to Hybrid command 75', 'public void selectMap(byte map)' in svc and 'mapSelect(map);' in svc and 'new Message((byte) 70)' not in svc)
+check('Hybrid ping does not send unsupported cmd 42', 'new Message((byte) 42)' not in svc)
+check('desktop window is resizable', 'setResizable(true)' in launcher)
+hybrid_cfg = text('core/src/coreLG/HybridConfig.java')
+check('desktop window size can be configured', 'ARMY2_WIDTH' in hybrid_cfg and 'ARMY2_HEIGHT' in hybrid_cfg and 'windowWidth()' in hybrid_cfg and 'windowHeight()' in hybrid_cfg)
+check('one-file cache validates embedded JVM runtime', 'runtime", "bin", "server", "jvm.dll' in onefile and 'IsCacheValid' in onefile and 'MarkerName' in onefile)
+check('one-file launcher does not relaunch after child crash/exit', 'runtime < TimeSpan.FromSeconds(8)' not in onefile and 'RebuildPayload(cacheRoot)' not in onefile and 'return Launch(appExe, appDir, args);' in onefile)
+
 failed = [n for n, ok, _ in checks if not ok]
 print(f'\nSUMMARY: {len(checks)-len(failed)}/{len(checks)} checks PASS')
 if failed:
@@ -137,3 +173,4 @@ if failed:
 _build_gradle = (ROOT / "build.gradle").read_text(encoding="utf-8")
 assert "dependsOn ':core:jar'" in _build_gradle, "desktop:dist must depend on :core:jar"
 print("PASS: desktop fat-JAR task depends on :core:jar")
+

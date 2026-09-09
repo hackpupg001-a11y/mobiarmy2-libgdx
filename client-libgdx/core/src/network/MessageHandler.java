@@ -298,6 +298,9 @@ public class MessageHandler implements IMessageHandler {
                         }
                         CCanvas.endDlg();
                         GameScr.trainingMode = false;
+                        if (CCanvas.prepareScr == null) {
+                            CCanvas.prepareScr = new PrepareScr();
+                        }
                         CCanvas.prepareScr.setPlayers(ownerID, money, players);
                         int i = 0;
                         while (i < players.size()) {
@@ -2459,6 +2462,12 @@ public class MessageHandler implements IMessageHandler {
                     // Never leave the UI spinning forever if LOGIN_SUCCESS parsing fails.
                     CCanvas.endDlg();
                     CCanvas.startOKDlg("Lỗi dữ liệu đăng nhập. Client/server không cùng định dạng protocol.");
+                } else if (msg.command == 6 || msg.command == 7 || msg.command == 8
+                        || msg.command == -28 || msg.command == 75 || msg.command == 76) {
+                    // Same rule for room/join/map packets: a parser error must be
+                    // visible instead of leaving a permanent loading dialog.
+                    CCanvas.endDlg();
+                    CCanvas.startOKDlg("Lỗi dữ liệu phòng (cmd " + msg.command + ").");
                 }
             }
         }

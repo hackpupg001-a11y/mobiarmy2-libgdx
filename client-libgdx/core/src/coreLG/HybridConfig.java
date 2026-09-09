@@ -13,6 +13,8 @@ public final class HybridConfig {
     private static final String LAN_NAME = "Trái Đất";
     private static final int DEFAULT_GAME_PORT = 8122;
     private static final int DEFAULT_WEB_PORT = 8080;
+    private static final int DEFAULT_WINDOW_WIDTH = 960;
+    private static final int DEFAULT_WINDOW_HEIGHT = 540;
 
     private HybridConfig() {
     }
@@ -32,6 +34,17 @@ public final class HybridConfig {
 
     public static int webPort() {
         return parsePort(firstNonBlank(System.getProperty("army2.webPort"), System.getenv("ARMY2_WEB_PORT"), String.valueOf(DEFAULT_WEB_PORT)), DEFAULT_WEB_PORT);
+    }
+
+
+    public static int windowWidth() {
+        return parseDimension(firstNonBlank(System.getProperty("army2.width"), System.getenv("ARMY2_WIDTH"),
+                String.valueOf(DEFAULT_WINDOW_WIDTH)), DEFAULT_WINDOW_WIDTH, 640, 1920);
+    }
+
+    public static int windowHeight() {
+        return parseDimension(firstNonBlank(System.getProperty("army2.height"), System.getenv("ARMY2_HEIGHT"),
+                String.valueOf(DEFAULT_WINDOW_HEIGHT)), DEFAULT_WINDOW_HEIGHT, 360, 1080);
     }
 
     public static String serverName() {
@@ -85,6 +98,22 @@ public final class HybridConfig {
 
     public static String webRootUrl() {
         return "http://" + host() + ":" + webPort();
+    }
+
+
+    private static int parseDimension(String raw, int fallback, int min, int max) {
+        try {
+            int value = Integer.parseInt(raw.trim());
+            if (value < min) {
+                return min;
+            }
+            if (value > max) {
+                return max;
+            }
+            return value;
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 
     private static int parsePort(String raw, int fallback) {
