@@ -1,6 +1,18 @@
 from pathlib import Path
 import re, sys
 
+# GitHub Actions Windows runners may expose CP1252 as the inherited console
+# encoding.  The verifier intentionally contains Vietnamese labels from the
+# client UI (for example "LỰC MAX"), so force a deterministic UTF-8 stream
+# before printing any check result.  errors='backslashreplace' also keeps the
+# verifier alive if a third-party runner cannot represent an unexpected glyph.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
+
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'core' / 'src'
 DESKTOP = ROOT / 'desktop' / 'src'

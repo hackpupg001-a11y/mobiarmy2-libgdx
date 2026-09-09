@@ -17,6 +17,12 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 30
 
+    # Keep Python/PowerShell output deterministic on Windows runners. Without
+    # this, CP1252 can crash tools/verify_source.py on Vietnamese UI labels.
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: 'utf-8'
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -40,6 +46,7 @@ jobs:
         shell: pwsh
         working-directory: client-libgdx
         run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
           python tools/verify_source.py
 
       - name: Show Java and Gradle versions
