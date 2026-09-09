@@ -26,11 +26,11 @@ public final class DesktopLauncher {
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
         config.setForegroundFPS(60);
         config.setIdleFPS(30);
-        // A minimized LWJGL window can transiently report a 0x0 framebuffer.
-        // Pause rendering while minimized, but do NOT pause merely on Alt+Tab.
-        // MainGame.pause()/resume() keep the desktop session state intact.
-        config.setPauseWhenMinimized(true);
-        config.setPauseWhenLostFocus(false);
+        // libGDX 1.12.1 already pauses/resumes ApplicationListener when the
+        // LWJGL3 window is iconified/restored, while ordinary focus loss keeps
+        // the listener running. The setPauseWhen* configuration methods were
+        // only added in libGDX 1.13.0, so do not call them on this 1.12.1 build.
+        // MainGame also guards a transient 0x0/1x1 framebuffer during minimize.
         config.setWindowedMode(HybridConfig.windowWidth(), HybridConfig.windowHeight());
         config.setResizable(true);
         config.setWindowIcon("res/icon.png");

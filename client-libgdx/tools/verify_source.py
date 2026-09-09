@@ -75,7 +75,7 @@ check('login/input dialog preserve text typing', 'CCanvas.curScr instanceof Logi
 check('desktop mapped keys release even after screen changes', 'desktopKeysDown.remove(Integer.valueOf(keycode))' in main and 'Release based on the physical key that went down' in main)
 check('desktop pause does not latch on PC', 'isPause = !CCanvas.isPc();' in main)
 launcher = text('desktop/src/com/mygdx/game/DesktopLauncher.java')
-check('desktop minimizes safely without losing focus lifecycle', 'setPauseWhenMinimized(true)' in launcher and 'setPauseWhenLostFocus(false)' in launcher)
+check('desktop minimize code is libGDX 1.12.1 compatible', 'setPauseWhenMinimized' not in launcher and 'setPauseWhenLostFocus' not in launcher and 'getWidth() <= 1' in main and 'getHeight() <= 1' in main)
 check('desktop crash log is written on fatal launcher error', 'DataViewer-crash.log' in launcher and 'writeCrashLog' in launcher)
 check('Hybrid 2.3 room list uses client command 6', 'public void requestRoomList()' in svc and 'new Message((byte) 6)' in svc)
 check('unsupported 2.4 room-list command is not sent', 'new Message((byte) -28)' not in svc)
