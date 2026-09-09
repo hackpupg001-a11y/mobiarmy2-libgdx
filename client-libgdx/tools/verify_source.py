@@ -161,6 +161,20 @@ check('desktop window size can be configured', 'ARMY2_WIDTH' in hybrid_cfg and '
 check('one-file cache validates embedded JVM runtime', 'runtime", "bin", "server", "jvm.dll' in onefile and 'IsCacheValid' in onefile and 'MarkerName' in onefile)
 check('one-file launcher does not relaunch after child crash/exit', 'runtime < TimeSpan.FromSeconds(8)' not in onefile and 'RebuildPayload(cacheRoot)' not in onefile and 'return Launch(appExe, appDir, args);' in onefile)
 
+# FIX12: actual in-battle PC controls + classic Hybrid room flow.
+cp = text('core/src/player/CPlayer.java')
+gs = text('core/src/screen/GameScr.java')
+room2 = text('core/src/screen/RoomListScr2.java')
+pause = text('core/src/model/PauseMenu.java')
+check('battle A/D drives CPlayer movement', 'leftHeld = CCanvas.keyHold[4]' in cp and 'rightHeld = CCanvas.keyHold[6]' in cp and 'this.move(0)' in cp and 'this.move(2)' in cp)
+check('battle W/S drives aiming', 'CCanvas.keyHold[2]' in cp and 'CCanvas.keyHold[8]' in cp and 'this.aimUp()' in cp and 'this.aimDown()' in cp)
+check('battle Space is hold/release fire', 'desktopFireHeld' in cp and 'this.holdFire()' in cp and 'this.fire()' in cp)
+check('battle movement release syncs position', 'GameService.gI().move((short) this.x, (short) this.y)' in cp)
+check('battle Q/E softkeys exist', 'this.left = new Command("Item"' in gs and 'this.right = new Command("Menu"' in gs)
+check('battle item grid uses WASD + Space', 'handleDesktopItemSelector()' in gs and 'useSelectedItemFromKeyboard()' in gs and 'CCanvas.keyReleased[5]' in gs)
+check('battle pause menu uses W/S Space Q E', 'handleKeyboardInput()' in pause and 'CCanvas.keyPressed[13]' in pause and 'CCanvas.keyPressed[12]' in pause)
+check('Hybrid room selection requests cmd7 area list', '!this.isEmptyRoom' in room2 and 'GameService.gI().requestBoardList(info.id)' in room2)
+
 failed = [n for n, ok, _ in checks if not ok]
 print(f'\nSUMMARY: {len(checks)-len(failed)}/{len(checks)} checks PASS')
 if failed:

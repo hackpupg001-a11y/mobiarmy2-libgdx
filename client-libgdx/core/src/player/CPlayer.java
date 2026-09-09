@@ -236,6 +236,9 @@ public class CPlayer {
     public static int xSuper;
     public static int ySuper;
     public static boolean isStopFire;
+    private boolean desktopWasMoving;
+    private boolean desktopFireHeld;
+    private long desktopControlNextAt;
     public boolean isPaintCountDown;
     public static int xM;
     public static int yM;
@@ -569,6 +572,8 @@ public class CPlayer {
     }
 
     public void update() {
+        this.updateDesktopKeyboardControls();
+
         if (PM.curP == GameScr.myIndex) {
             if (this.angryX < this.currAngry) {
                 this.angryX = (byte) (this.angryX + 2);
@@ -1757,10 +1762,110 @@ public class CPlayer {
         }
     }
 
+    private void updateDesktopKeyboardControls() {
+        if (this.index != GameScr.myIndex || GameScr.pm == null) {
+            return;
+        }
+
+        boolean leftHeld = CCanvas.keyHold[4];
+        boolean rightHeld = CCanvas.keyHold[6];
+        boolean fireHeld = CCanvas.keyHold[5];
+
+        boolean blocked = !GameScr.pm.isYourTurn()
+                || CCanvas.currentDialog != null
+                || (CCanvas.menu != null && CCanvas.menu.showMenu)
+                || (CCanvas.pausemenu != null && CCanvas.pausemenu.isShow)
+                || (CCanvas.gameScr != null && CCanvas.gameScr.isItemSelectorOpen())
+                || this.state == 5
+                || this.falling
+                || isShooting
+                || BM.active;
+
+        if (blocked) {
+            this.desktopWasMoving = false;
+            this.desktopFireHeld = false;
+            return;
+        }
+
+        // Mouse/touch sends the final position when movement is released. Do
+        // the same for A/D so the server sees the desktop player's final spot.
+        if (this.desktopWasMoving && !leftHeld && !rightHeld) {
+            if (this.lastx != this.x) {
+                this.resetLastUpdateXY(this.x, this.y);
+                GameService.gI().move((short) this.x, (short) this.y);
+            }
+            this.lastx = (short) this.x;
+            if (this.state == 1) {
+                this.setState((byte) 0);
+            }
+            this.desktopWasMoving = false;
+        }
+
+        // Space is a real hold/release fire key, not a one-shot OK key in battle.
+        if (this.desktopFireHeld && !fireHeld) {
+            if (!isStopFire) {
+                this.fire();
+            }
+            this.desktopFireHeld = false;
+            CCanvas.keyReleased[5] = false;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now < this.desktopControlNextAt) {
+            return;
+        }
+        this.desktopControlNextAt = now + 50L;
+
+        if (leftHeld && !rightHeld) {
+            this.move(0);
+            this.desktopWasMoving = true;
+        } else if (rightHeld && !leftHeld) {
+            this.move(2);
+            this.desktopWasMoving = true;
+        }
+
+        if (CCanvas.keyHold[2] && !CCanvas.keyHold[8]) {
+            this.aimUp();
+        } else if (CCanvas.keyHold[8] && !CCanvas.keyHold[2]) {
+            this.aimDown();
+        }
+
+        if (fireHeld && !isStopFire) {
+            this.desktopFireHeld = true;
+            this.holdFire();
+        }
+    }
+
     public void aimUp() {
+        if (this.state == 3) {
+            return;
+        }
+        if (ModSettings.angle360) {
+            this.angle += this.look == 0 ? -1 : 1;
+            this.angle = ModSettings.normalize360(this.angle);
+        } else if (this.look == 0) {
+            this.angle = Math.max(90, this.angle - 1);
+        } else {
+            this.angle = Math.min(90, this.angle + 1);
+        }
+        this.angleUpdate();
+        this.checkAngleForSprite();
     }
 
     public void aimDown() {
+        if (this.state == 3) {
+            return;
+        }
+        if (ModSettings.angle360) {
+            this.angle += this.look == 0 ? 1 : -1;
+            this.angle = ModSettings.normalize360(this.angle);
+        } else if (this.look == 0) {
+            this.angle = Math.min(180 - angleLock[this.gun], this.angle + 1);
+        } else {
+            this.angle = Math.max(angleLock[this.gun], this.angle - 1);
+        }
+        this.angleUpdate();
+        this.checkAngleForSprite();
     }
 
     public void checkAngleForSprite() {

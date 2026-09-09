@@ -306,6 +306,12 @@ public class CCanvas extends MotherCanvas implements IActionListener {
         } else if (menu != null && menu.showMenu) {
             // W/S navigate, Space/Q select, E closes.
             menu.updateMenuKey();
+        } else if (pausemenu != null && pausemenu.isShow) {
+            // Battle pause menu was touch-only in the inherited desktop source.
+            pausemenu.handleKeyboardInput();
+            if (pausemenu.isShow) {
+                pausemenu.update();
+            }
         }
 
         for (int i = 0; i < arrPopups.size(); ++i) {
@@ -316,7 +322,9 @@ public class CCanvas extends MotherCanvas implements IActionListener {
             // Desktop keyboard commands must not depend on a mouse/touch release.
             // The original desktop source only called CScreen.input() from
             // onPointerReleased(), which made Q/E/Space appear mapped but inert.
-            if (currentDialog == null && (menu == null || !menu.showMenu)) {
+            if (currentDialog == null
+                    && (menu == null || !menu.showMenu)
+                    && (pausemenu == null || !pausemenu.isShow)) {
                 if (keyPressed[5]) {
                     keyPressed[5] = false;
                     if (curScr.center != null && curScr.center.action != null) {

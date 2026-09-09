@@ -412,6 +412,31 @@ public class GameScr extends CScreen {
 
     public GameScr() {
         this.initGamescr();
+        // Desktop/J2ME-style battle softkeys. Q opens the item selector, E opens
+        // the battle menu; CCanvas dispatches these globally as left/right keys.
+        this.left = new Command("Item", new IAction() {
+            public void perform() {
+                if (GameScr.pm != null && GameScr.pm.isYourTurn()
+                        && CCanvas.currentDialog == null
+                        && !CCanvas.pausemenu.isShow) {
+                    GameScr.this.isSelectItem = true;
+                    GameScr.curItemSelec = 7;
+                    GameScr.this.timeDelayClosePauseMenu = mSystem.currentTimeMillis() + 300L;
+                }
+            }
+        });
+        this.right = new Command("Menu", new IAction() {
+            public void perform() {
+                if (GameScr.this.isSelectItem) {
+                    GameScr.this.isSelectItem = false;
+                    GameScr.this.timeDelayClosePauseMenu = mSystem.currentTimeMillis() + 300L;
+                    return;
+                }
+                if (CCanvas.currentDialog == null && !CCanvas.pausemenu.isShow) {
+                    GameScr.this.doShowPauseMenu();
+                }
+            }
+        });
     }
 
     public void initGamescr() {
@@ -739,7 +764,84 @@ public class GameScr extends CScreen {
         Session_ME.receiveSynchronized = 0;
     }
 
+    public boolean isItemSelectorOpen() {
+        return this.isSelectItem;
+    }
+
+    private void handleDesktopItemSelector() {
+        if (!this.isSelectItem) {
+            return;
+        }
+
+        if (CCanvas.keyPressed[4]) {
+            CCanvas.keyPressed[4] = false;
+            if (curItemSelec % 4 > 0) {
+                curItemSelec--;
+            }
+        }
+        if (CCanvas.keyPressed[6]) {
+            CCanvas.keyPressed[6] = false;
+            if (curItemSelec % 4 < 3) {
+                curItemSelec++;
+            }
+        }
+        if (CCanvas.keyPressed[2]) {
+            CCanvas.keyPressed[2] = false;
+            if (curItemSelec >= 4) {
+                curItemSelec -= 4;
+            }
+        }
+        if (CCanvas.keyPressed[8]) {
+            CCanvas.keyPressed[8] = false;
+            if (curItemSelec < 4) {
+                curItemSelec += 4;
+            }
+        }
+
+        // CCanvas reserves Space as the battle FIRE key, so item selection is
+        // committed on its release. This avoids a charge/fire leaking through
+        // while the item grid is open.
+        if (CCanvas.keyReleased[5]) {
+            CCanvas.keyReleased[5] = false;
+            this.useSelectedItemFromKeyboard();
+        }
+    }
+
+    private void useSelectedItemFromKeyboard() {
+        if (PM.getMyPlayer() == null || curItemSelec < 0 || curItemSelec >= PM.getMyPlayer().item.length) {
+            return;
+        }
+        int[] itemList = PM.getMyPlayer().item;
+        if (trainingMode) {
+            clearKey();
+            PM.getMyPlayer().UseItem(itemList[curItemSelec], true, curItemSelec);
+            if (itemList[curItemSelec] == 0) {
+                PM.p[0].hp += 30;
+            }
+            this.isSelectItem = false;
+            this.timeDelayClosePauseMenu = mSystem.currentTimeMillis() + 300L;
+            return;
+        }
+
+        if (PM.getMyPlayer().itemUsed != -1 || itemList[curItemSelec] == -2 || itemList[curItemSelec] == -1) {
+            this.isSelectItem = false;
+            return;
+        }
+        if (!pm.isYourTurn()) {
+            return;
+        }
+        if (PrepareScr.currLevel == 7 && GameScr.num[curItemSelec] == 0) {
+            return;
+        }
+        PM.getMyPlayer().UseItem(itemList[curItemSelec], false, curItemSelec);
+        this.isSelectItem = false;
+        this.timeDelayClosePauseMenu = mSystem.currentTimeMillis() + 300L;
+        clearKey();
+    }
+
     public void update() {
+        this.handleDesktopItemSelector();
+
         if (trainingMode) {
             this.doTraining();
         }

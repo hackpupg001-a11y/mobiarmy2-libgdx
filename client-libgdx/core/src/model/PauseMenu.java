@@ -91,6 +91,41 @@ public class PauseMenu {
 
    }
 
+   public void handleKeyboardInput() {
+      if (!this.isShow || this.menuItems == null || this.menuItems.size() == 0) {
+         return;
+      }
+
+      if (CCanvas.keyPressed[2]) {
+         CCanvas.keyPressed[2] = false;
+         this.menuSelectedItem--;
+         if (this.menuSelectedItem < 0) {
+            this.menuSelectedItem = this.menuItems.size() - 1;
+         }
+      }
+      if (CCanvas.keyPressed[8]) {
+         CCanvas.keyPressed[8] = false;
+         this.menuSelectedItem++;
+         if (this.menuSelectedItem >= this.menuItems.size()) {
+            this.menuSelectedItem = 0;
+         }
+      }
+      if (CCanvas.keyPressed[13]) {
+         CCanvas.keyPressed[13] = false;
+         this.isShow = false;
+         return;
+      }
+      if (CCanvas.keyPressed[5] || CCanvas.keyPressed[12]) {
+         CCanvas.keyPressed[5] = false;
+         CCanvas.keyPressed[12] = false;
+         Command selectedCommand = (Command)this.menuItems.elementAt(this.menuSelectedItem);
+         this.isShow = false;
+         if (selectedCommand != null && selectedCommand.action != null) {
+            selectedCommand.action.perform();
+         }
+      }
+   }
+
    public void update() {
       if (this.menuTemY > this.menuY) {
          int delta = this.menuTemY - this.menuY >> 1;

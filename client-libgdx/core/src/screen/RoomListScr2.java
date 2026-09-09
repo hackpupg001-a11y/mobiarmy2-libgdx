@@ -119,8 +119,21 @@ public class RoomListScr2 extends CScreen {
    protected void doSelectRoom() {
       if (this.selected != -1) {
          RoomInfo info = (RoomInfo)this.roomList.elementAt(this.selected);
+
+         // cmd 6 is the top-level Hybrid 2.3 room list. Selecting one of these
+         // entries must request cmd 7 (area/board list) first. The inherited
+         // 2.4 desktop source tried to join board 0 immediately, which made
+         // normal PvP rooms look like they were stuck loading.
+         if (!this.isEmptyRoom) {
+            PrepareScr.currentRoom = info.id;
+            GameService.gI().requestBoardList(info.id);
+            CCanvas.startWaitDlg(Language.pleaseWait());
+            return;
+         }
+
          if (info.boardID == -1) {
             GameService.gI().requestEmptyRoom((byte)1, info.lv, (String)null);
+            return;
          }
 
          BoardListScr.boardName = Language.area() + " " + info.boardID;
