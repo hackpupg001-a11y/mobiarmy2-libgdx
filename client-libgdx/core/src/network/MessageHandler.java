@@ -1,5 +1,6 @@
 package network;
 
+import mod.ModSettings;
 import CLib.RMS;
 import CLib.mImage;
 import CLib.mSystem;
@@ -508,7 +509,14 @@ public class MessageHandler implements IMessageHandler {
                         break;
                     }
                     case 46: {
-                        this.gameLogicHandler.onServerInfo(msg.reader().readUTF());
+                        // V10 option "NHẬN LOA LỚN": the original client always
+                        // consumes this UTF packet, but only forwards it to the UI
+                        // when the toggle is enabled.  Consuming it is important so
+                        // the stream never becomes misaligned.
+                        String bigSpeaker = msg.reader().readUTF();
+                        if (ModSettings.receiveBigSpeaker) {
+                            this.gameLogicHandler.onServerInfo(bigSpeaker);
+                        }
                         break;
                     }
                     case 48: {
@@ -1365,10 +1373,11 @@ public class MessageHandler implements IMessageHandler {
                             byte dte = msg.reader().readByte();
                             byte vip = msg.reader().readByte();
                             int level2 = msg.reader().readUnsignedByte();
-                            Equip equip = PlayerEquip.getEquip(gl, tp, idb);
-                            equip.getInvAtribute(ab);
+                            Equip equip = PlayerEquip.createEquip(gl, tp, idb);
                             Equip tam = null;
                             if (equip != null) {
+                                equip.removeAbility();
+                                equip.getInvAtribute(ab);
                                 tam = new Equip();
                                 tam.id = equip.id;
                                 tam.type = equip.type;
@@ -1393,11 +1402,21 @@ public class MessageHandler implements IMessageHandler {
                                     tam.inv_percen[a2] = equip.inv_percen[a2];
                                     ++a2;
                                 }
-                                if (TerrainMidlet.myInfo.myEquip.equips[tam.type] != null && TerrainMidlet.myInfo.myEquip.equips[tam.type].id == tam.id) {
-                                    TerrainMidlet.myInfo.myEquip.equips[tam.type].dbKey = dbKey;
+                                int equipType = tam.type & 255;
+                                if (TerrainMidlet.myInfo != null
+                                        && TerrainMidlet.myInfo.myEquip != null
+                                        && TerrainMidlet.myInfo.myEquip.equips != null
+                                        && equipType < TerrainMidlet.myInfo.myEquip.equips.length
+                                        && TerrainMidlet.myInfo.myEquip.equips[equipType] != null
+                                        && TerrainMidlet.myInfo.myEquip.equips[equipType].id == tam.id) {
+                                    TerrainMidlet.myInfo.myEquip.equips[equipType].dbKey = dbKey;
                                 }
                             }
-                            CCanvas.equipScreen.addEquip(tam);
+                            if (tam != null) {
+                                CCanvas.equipScreen.addEquip(tam);
+                            } else {
+                                CRes.out("[EQUIP] Ignored unknown inventory template glass=" + gl + " type=" + tp + " id=" + idb);
+                            }
                         }
                         if (action == 1) {
                             String info = msg.reader().readUTF();
@@ -1409,7 +1428,11 @@ public class MessageHandler implements IMessageHandler {
                             while (i < 10) {
                                 int j = 0;
                                 while (j < 5) {
-                                    p.equipID[i][j] = msg.reader().readShort();
+                                    short equipId = msg.reader().readShort();
+                                    if (p != null && p.equipID != null && i < p.equipID.length
+                                            && p.equipID[i] != null && j < p.equipID[i].length) {
+                                        p.equipID[i][j] = equipId;
+                                    }
                                     ++j;
                                 }
                                 ++i;
@@ -1451,11 +1474,12 @@ public class MessageHandler implements IMessageHandler {
                             vip[i] = msg.reader().readByte();
                             level2[i] = msg.reader().readUnsignedByte();
                             Equip e = PlayerEquip.createEquip(glassI[i], typeI[i], idI[i]);
-                            e.level2 = level2[i];
-                            e.removeAbility();
-                            e.getInvAtribute(currAb);
-                            Equip tam = new Equip();
+                            Equip tam = null;
                             if (e != null) {
+                                e.level2 = level2[i];
+                                e.removeAbility();
+                                e.getInvAtribute(currAb);
+                                tam = new Equip();
                                 e.date = date[i];
                                 e.name = name[i];
                                 tam.id = e.id;
@@ -1480,15 +1504,22 @@ public class MessageHandler implements IMessageHandler {
                                 tam.removeAbility();
                                 tam.getInvAtribute(currAb);
                                 inventory.addElement(tam);
+                            } else {
+                                CRes.out("[EQUIP] Inventory template missing glass=" + glassI[i] + " type=" + typeI[i] + " id=" + idI[i]);
                             }
                             ++i;
                         }
                         i = 0;
                         while (i < 5) {
                             int myDbKey = msg.reader().readInt();
-                            if (TerrainMidlet.myInfo.myEquip.equips[i] != null) {
+                            if (TerrainMidlet.myInfo != null && TerrainMidlet.myInfo.myEquip != null
+                                    && TerrainMidlet.myInfo.myEquip.equips != null
+                                    && i < TerrainMidlet.myInfo.myEquip.equips.length
+                                    && TerrainMidlet.myInfo.myEquip.equips[i] != null) {
                                 TerrainMidlet.myInfo.myEquip.equips[i].dbKey = myDbKey;
-                                TerrainMidlet.myInfo.dbKey[i] = myDbKey;
+                                if (TerrainMidlet.myInfo.dbKey != null && i < TerrainMidlet.myInfo.dbKey.length) {
+                                    TerrainMidlet.myInfo.dbKey[i] = myDbKey;
+                                }
                             }
                             ++i;
                         }
@@ -1541,7 +1572,7 @@ public class MessageHandler implements IMessageHandler {
                             int luongE = msg.reader().readInt();
                             byte dateE = msg.reader().readByte();
                             byte levelE = msg.reader().readByte();
-                            Equip eq = PlayerEquip.getEquip(glassID, typeE, idE);
+                            Equip eq = PlayerEquip.createEquip(glassID, typeE, idE);
                             if (eq != null) {
                                 eq.date = dateE;
                                 eq.name = nameE;
@@ -1980,20 +2011,32 @@ public class MessageHandler implements IMessageHandler {
                                 if (CCanvas.curScr == CCanvas.equipScreen) {
                                     tam = CCanvas.equipScreen.getEquip(IdbKey);
                                 }
-                                tam.getInvAtribute(IAb);
-                                tam.slot = slotUpdate;
-                                tam.date = dateUpdate;
-                                if (CCanvas.curScr == CCanvas.inventory) {
-                                    CCanvas.inventory.getDetail();
+                                if (tam == null) {
+                                    CRes.out("[EQUIP] Inventory update ignored: missing dbKey=" + IdbKey);
+                                } else {
+                                    tam.getInvAtribute(IAb);
+                                    tam.slot = slotUpdate;
+                                    tam.date = dateUpdate;
+                                    if (CCanvas.curScr == CCanvas.inventory) {
+                                        CCanvas.inventory.getDetail();
+                                    }
+                                    if (CCanvas.curScr == CCanvas.equipScreen) {
+                                        CCanvas.equipScreen.getDetail();
+                                    }
+                                    int equipType = tam.type & 255;
+                                    if (TerrainMidlet.myInfo != null
+                                            && TerrainMidlet.myInfo.myEquip != null
+                                            && TerrainMidlet.myInfo.myEquip.equips != null
+                                            && equipType < TerrainMidlet.myInfo.myEquip.equips.length
+                                            && TerrainMidlet.myInfo.myEquip.equips[equipType] != null
+                                            && TerrainMidlet.myInfo.myEquip.equips[equipType].dbKey == tam.dbKey) {
+                                        TerrainMidlet.myInfo.myEquip.equips[equipType].changeToEquip(tam);
+                                        TerrainMidlet.myInfo.clearAttAddPoint();
+                                    }
+                                    if (CCanvas.equipScreen != null) {
+                                        CCanvas.equipScreen.getBaseAttribute();
+                                    }
                                 }
-                                if (CCanvas.curScr == CCanvas.equipScreen) {
-                                    CCanvas.equipScreen.getDetail();
-                                }
-                                if (TerrainMidlet.myInfo.myEquip.equips[tam.type] != null && TerrainMidlet.myInfo.myEquip.equips[tam.type].dbKey == tam.dbKey) {
-                                    TerrainMidlet.myInfo.myEquip.equips[tam.type].changeToEquip(tam);
-                                    TerrainMidlet.myInfo.clearAttAddPoint();
-                                }
-                                CCanvas.equipScreen.getBaseAttribute();
                             } else if (IAction2 == 1) {
                                 IdMaterial = msg.reader().readByte();
                                 String nameMaterial = msg.reader().readUTF();
@@ -2266,6 +2309,14 @@ public class MessageHandler implements IMessageHandler {
                                 byte typeFomula = msg.reader().readByte();
                                 CRes.out("id item create= " + idItemCreate + " type Fomula= " + typeFomula + " gun= " + gunFomula);
                                 fomula.e = PlayerEquip.createEquip(gunFomula, typeFomula, idItemCreate);
+                                if (fomula.e == null) {
+                                    fomula.e = new Equip();
+                                    fomula.e.glass = gunFomula;
+                                    fomula.e.type = typeFomula;
+                                    fomula.e.id = idItemCreate;
+                                    CRes.out("[EQUIP] Formula output template missing glass=" + gunFomula
+                                            + " type=" + typeFomula + " id=" + idItemCreate);
+                                }
                                 fomula.e.name = nameEquip;
                                 CRes.out("Name equip= " + nameEquip);
                                 fomula.levelRequire = leveRequire;
@@ -2309,6 +2360,14 @@ public class MessageHandler implements IMessageHandler {
                                 fomula.isHave = isHave;
                                 CRes.out("is Have= " + isHave);
                                 fomula.equipRequire = PlayerEquip.createEquip(gunFomula, typeFomula, idEquipRequire);
+                                if (fomula.equipRequire == null) {
+                                    fomula.equipRequire = new Equip();
+                                    fomula.equipRequire.glass = gunFomula;
+                                    fomula.equipRequire.type = typeFomula;
+                                    fomula.equipRequire.id = idEquipRequire;
+                                    CRes.out("[EQUIP] Formula requirement template missing glass=" + gunFomula
+                                            + " type=" + typeFomula + " id=" + idEquipRequire);
+                                }
                                 fomula.equipRequire.name = nameEquipRequire;
                                 fomula.finish = isFinish;
                                 CRes.out("is Finish= " + isFinish);

@@ -20,6 +20,8 @@ import item.BM;
 import item.Bullet;
 import item.Item;
 
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.Vector;
 
 import map.Background;
@@ -627,6 +629,150 @@ public class GameScr extends CScreen {
         this.equip = equip;
     }
 
+    /** Opens the same V10 submenu recovered from the Army2 2.3.0 V10 JAR. */
+    public void showV10Menu() {
+        this.isShowPausemenu = true;
+        Vector<Command> v10Menu = new Vector<Command>();
+        v10Menu.addElement(new Command(ModSettings.onOffVi(ModSettings.drawAimGuide) + " VẼ CĂN GÓC", new IAction() {
+            public void perform() {
+                ModSettings.toggleDrawAimGuide();
+                GameScr.this.isShowPausemenu = false;
+            }
+        }));
+        v10Menu.addElement(new Command(ModSettings.onOffVi(ModSettings.drawHp) + " VẼ HP", new IAction() {
+            public void perform() {
+                ModSettings.toggleDrawHp();
+                GameScr.this.isShowPausemenu = false;
+            }
+        }));
+        v10Menu.addElement(new Command(ModSettings.onOffVi(ModSettings.receiveBigSpeaker) + " NHẬN LOA LỚN", new IAction() {
+            public void perform() {
+                ModSettings.toggleReceiveBigSpeaker();
+                GameScr.this.isShowPausemenu = false;
+            }
+        }));
+        v10Menu.addElement(new Command("CÀI SỐ FRAME", new IAction() {
+            public void perform() {
+                GameScr.this.showFrameMaxInput();
+            }
+        }));
+        if (isV10DoublePowerGun()) {
+            v10Menu.addElement(new Command("CÀI FRAME 2", new IAction() {
+                public void perform() {
+                    GameScr.this.showFrameStepInput();
+                }
+            }));
+        }
+        v10Menu.addElement(new Command("XEM GIỜ", new IAction() {
+            public void perform() {
+                Calendar now = Calendar.getInstance(TimeZone.getTimeZone("GMT+07:00"));
+                String time = "Bây giờ là: " + now.get(Calendar.HOUR_OF_DAY) + ":"
+                        + now.get(Calendar.MINUTE) + ":" + now.get(Calendar.SECOND)
+                        + "\nNgày:" + now.get(Calendar.DAY_OF_MONTH) + " tháng "
+                        + (now.get(Calendar.MONTH) + 1) + " năm " + now.get(Calendar.YEAR) + ".";
+                CCanvas.startOKDlg(time);
+                GameScr.this.isShowPausemenu = false;
+            }
+        }));
+        v10Menu.addElement(new Command("TRỞ LẠI", new IAction() {
+            public void perform() {
+                GameScr.this.doShowPauseMenu();
+            }
+        }));
+        CCanvas.pausemenu.startAt(v10Menu);
+    }
+
+    private static boolean isV10DoublePowerGun() {
+        CPlayer player = PM.getMyPlayer();
+        return player != null && (player.gun == 6 || player.gun == 8);
+    }
+
+    public void showMaxForceInput() {
+        this.isShowPausemenu = false;
+        CCanvas.inputDlg.setInfo("Lực bắn", new IAction() {
+            public void perform() {
+                int value = 30;
+                try {
+                    value = Integer.parseInt(CCanvas.inputDlg.tfInput.getText());
+                } catch (Exception ignored) {
+                }
+                ModSettings.setMaxForce(value);
+                CCanvas.endDlg();
+                if (isV10DoublePowerGun()) {
+                    GameScr.this.showSecondMaxForceInput();
+                }
+            }
+        }, new IAction() {
+            public void perform() {
+                CCanvas.endDlg();
+            }
+        }, 1);
+        CCanvas.inputDlg.tfInput.setText(String.valueOf(ModSettings.maxForce));
+        CCanvas.inputDlg.show();
+    }
+
+    private void showSecondMaxForceInput() {
+        CCanvas.inputDlg.setInfo("Lực bắn 2", new IAction() {
+            public void perform() {
+                int value = 30;
+                try {
+                    value = Integer.parseInt(CCanvas.inputDlg.tfInput.getText());
+                } catch (Exception ignored) {
+                }
+                ModSettings.setSecondMaxForce(value);
+                CCanvas.endDlg();
+            }
+        }, new IAction() {
+            public void perform() {
+                CCanvas.endDlg();
+            }
+        }, 1);
+        CCanvas.inputDlg.tfInput.setText(String.valueOf(ModSettings.secondMaxForce));
+        CCanvas.inputDlg.show();
+    }
+
+    private void showFrameMaxInput() {
+        this.isShowPausemenu = false;
+        CCanvas.inputDlg.setInfo("Số frame max(-1 để vẽ full map)", new IAction() {
+            public void perform() {
+                int value = 100;
+                try {
+                    value = Integer.parseInt(CCanvas.inputDlg.tfInput.getText());
+                } catch (Exception ignored) {
+                }
+                ModSettings.setAimFrameMax(value);
+                CCanvas.endDlg();
+            }
+        }, new IAction() {
+            public void perform() {
+                CCanvas.endDlg();
+            }
+        }, 1);
+        CCanvas.inputDlg.tfInput.setText(String.valueOf(ModSettings.aimFrameMax));
+        CCanvas.inputDlg.show();
+    }
+
+    private void showFrameStepInput() {
+        this.isShowPausemenu = false;
+        CCanvas.inputDlg.setInfo("Số frame 2(số frame để vẽ số)", new IAction() {
+            public void perform() {
+                int value = 100;
+                try {
+                    value = Integer.parseInt(CCanvas.inputDlg.tfInput.getText());
+                } catch (Exception ignored) {
+                }
+                ModSettings.setAimFrameStep(value);
+                CCanvas.endDlg();
+            }
+        }, new IAction() {
+            public void perform() {
+                CCanvas.endDlg();
+            }
+        }, 1);
+        CCanvas.inputDlg.tfInput.setText(String.valueOf(ModSettings.aimFrameStep));
+        CCanvas.inputDlg.show();
+    }
+
     private void doShowPauseMenu() {
         this.isShowPausemenu = true;
         Vector<Command> menu = new Vector();
@@ -634,6 +780,17 @@ public class GameScr extends CScreen {
             public void perform() {
                 GameScr.this.isShowPausemenu = false;
                 GameScr.this.timeShowPauseMenu = mSystem.currentTimeMillis() + 300L;
+            }
+        }));
+        // V10 2.3.0 inserts these two entries immediately after Continue.
+        menu.addElement(new Command("LỰC MAX", new IAction() {
+            public void perform() {
+                GameScr.this.showMaxForceInput();
+            }
+        }));
+        menu.addElement(new Command("V10 MENU", new IAction() {
+            public void perform() {
+                GameScr.this.showV10Menu();
             }
         }));
         if (pm.isYourTurn()) {
@@ -1324,7 +1481,7 @@ public class GameScr extends CScreen {
 
         this.drawSCORE(g);
         if (ModSettings.showOverlay) {
-            Font.smallFontYellow.drawString(g, "MOD  " + ModSettings.shortStatus() + "  [F6/F7/F8/F9]", Camera.x + 6, Camera.y + h - 38, 0);
+            Font.smallFontYellow.drawString(g, "MOD  " + ModSettings.shortStatus() + "  [F5 LỰC/F6 MENU/F7/F8/F9]", Camera.x + 6, Camera.y + h - 38, 0);
         }
         String text;
         if (PM.getCurPlayer() != null) {

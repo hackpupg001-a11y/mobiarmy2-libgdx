@@ -47,6 +47,9 @@ public class PlayerEquip {
     }
 
     public static EquipGlass getEquipGlass(byte id) {
+        if (playerData == null) {
+            return null;
+        }
         for (int i = 0; i < playerData.size(); ++i) {
             EquipGlass eq = (EquipGlass) playerData.elementAt(i);
             if (eq != null && eq.glassID == id) {
@@ -76,31 +79,43 @@ public class PlayerEquip {
     }
 
     public static Equip createEquip(byte glass, byte type, short id) {
-        Equip e = new Equip();
         Equip tam = getEquip(glass, type, id);
-        if (tam != null) {
-            e.glass = tam.glass;
-            e.type = tam.type;
-            e.id = tam.id;
-            e.name = tam.name;
-            e.date = tam.date;
-            e.x = tam.x;
-            e.y = tam.y;
-            e.dx = tam.dx;
-            e.dy = tam.dy;
-            e.w = tam.w;
-            e.h = tam.h;
-            e.level = tam.level;
-            e.frame = tam.frame;
-            e.icon = tam.icon;
-            e.xu = tam.xu;
-            e.luong = tam.luong;
-            e.bullet = tam.bullet;
-            e.index = tam.index;
-            return e;
-        } else {
+        if (tam == null) {
             return null;
         }
+        Equip e = new Equip();
+        e.glass = tam.glass;
+        e.type = tam.type;
+        e.id = tam.id;
+        e.name = tam.name;
+        e.date = tam.date;
+        e.x = tam.x;
+        e.y = tam.y;
+        e.dx = tam.dx;
+        e.dy = tam.dy;
+        e.w = tam.w;
+        e.h = tam.h;
+        e.level = tam.level;
+        e.level2 = tam.level2;
+        e.frame = tam.frame;
+        e.icon = tam.icon;
+        e.xu = tam.xu;
+        e.luong = tam.luong;
+        e.bullet = tam.bullet;
+        e.index = tam.index;
+        e.slot = tam.slot;
+        e.vip = tam.vip;
+        e.addAbilityFromEquip(tam);
+        if (tam.shop_ability != null) {
+            e.shop_ability = tam.shop_ability.clone();
+        }
+        if (tam.shop_percen != null) {
+            e.shop_percen = tam.shop_percen.clone();
+        }
+        if (tam.shop_attAddPoint != null) {
+            e.shop_attAddPoint = tam.shop_attAddPoint.clone();
+        }
+        return e;
     }
 
     public void paintGiap(int x, int y, int look, int frame, mGraphics g) {
@@ -139,12 +154,22 @@ public class PlayerEquip {
     }
 
     public void paintFace(int x, int y, int look, int frame, mGraphics g) {
-        mImage img = null;
-        img = CPlayer.pImg[this.equips[0].glass];
-        int W = 0;
-        int H = 0;
-        W = img.image.getWidth();
-        H = img.image.getHeight() / 10;
+        if (g == null || this.equips == null || this.equips.length == 0 || this.equips[0] == null) {
+            return;
+        }
+        int glassIndex = this.equips[0].glass & 255;
+        if (CPlayer.pImg == null || glassIndex >= CPlayer.pImg.length) {
+            return;
+        }
+        mImage img = CPlayer.pImg[glassIndex];
+        if (img == null || img.image == null) {
+            return;
+        }
+        int W = img.image.getWidth();
+        int H = img.image.getHeight() / 10;
+        if (W <= 0 || H <= 0 || frame < 0 || frame * H + H > img.image.getHeight()) {
+            return;
+        }
         g.drawRegion(img, 0, frame * H, W, H, look, x, y, mGraphics.BOTTOM | mGraphics.HCENTER, false);
     }
 

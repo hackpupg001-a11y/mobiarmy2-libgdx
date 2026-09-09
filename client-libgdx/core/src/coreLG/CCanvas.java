@@ -572,6 +572,11 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                     MM.NUM_MAP = len6;
                     MM.mapName = new String[len6];
                     MM.mapFileName = new String[len6];
+                    if (MM.mapFiles == null) {
+                        MM.mapFiles = new Vector();
+                    } else {
+                        MM.mapFiles.removeAllElements();
+                    }
 
                     for (i = 0; i < len6; ++i) {
                         byte fileID = msg.reader().readByte();
@@ -580,19 +585,34 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                         msg.reader().read(fData, 0, maxDame);
                         short[] values = new short[5];
 
-                        for (i = 0; i < 5; ++i) {
-                            values[i] = msg.reader().readShort();
+                        // Do not reuse the outer map index here.  The old desktop
+                        // port assigned i=0..4 in this inner loop, leaving i==5
+                        // afterwards and corrupting mapName/mapFileName indexes.
+                        for (int j = 0; j < 5; ++j) {
+                            values[j] = msg.reader().readShort();
                         }
 
-                        MM.mapName[i] = msg.reader().readUTF();
-                        MM.mapFileName[i] = msg.reader().readUTF();
+                        String parsedMapName = msg.reader().readUTF();
+                        String parsedMapFileName = msg.reader().readUTF();
+                        MM.mapName[i] = parsedMapName == null || parsedMapName.trim().isEmpty()
+                                ? "Map " + (i + 1) : parsedMapName;
+                        MM.mapFileName[i] = parsedMapFileName == null || parsedMapFileName.trim().isEmpty()
+                                ? "map" + i : parsedMapFileName;
                         MapFile mf = new MapFile(fData, fileID, values);
                         MM.mapFiles.addElement(mf);
                         Object var31 = null;
                     }
 
                     CRes.out("=============================> MM.mapFileName  " + len6);
+                    // Fresh Hybrid login sends icondata2 before valuesdata2.
+                    // Rebuild map previews now that NUM_MAP and file names are
+                    // finally known; otherwise init() previously created a
+                    // zero-length preview array and the room map UI stayed blank.
+                    if (PrepareScr.fileData != null) {
+                        PrepareScr.init();
+                    }
                 } catch (Exception var23) {
+                    CRes.out("[MAP-DATA] Failed to parse map metadata: " + var23);
                 }
                 break;
             case 1:
@@ -656,7 +676,6 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                                     aibity[b] = msg.reader().readByte();
                                 }
 
-                                e.setInvAtribute();
                                 e.getInvAtribute(aibity);
                                 e.getShopAtribute(aibity);
                                 vEquip.addElement(e);
@@ -677,31 +696,42 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                     CRes.out("2 =============================> read Trang bi  type = 1 ");
                     mImage.createImage("/equip/01.png", new IAction2() {
                         public void perform(Object object) {
-                            EquipScreen.imgIconEQ[0] = new mImage((Image) object);
+                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 0 && object instanceof Image) {
+                                EquipScreen.imgIconEQ[0] = new mImage((Image) object);
+                            }
                         }
                     });
                     mImage.createImage("/equip/02.png", new IAction2() {
                         public void perform(Object object) {
-                            EquipScreen.imgIconEQ[1] = new mImage((Image) object);
+                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 1 && object instanceof Image) {
+                                EquipScreen.imgIconEQ[1] = new mImage((Image) object);
+                            }
                         }
                     });
                     mImage.createImage("/equip/03.png", new IAction2() {
                         public void perform(Object object) {
-                            EquipScreen.imgIconEQ[2] = new mImage((Image) object);
+                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 2 && object instanceof Image) {
+                                EquipScreen.imgIconEQ[2] = new mImage((Image) object);
+                            }
                         }
                     });
                     mImage.createImage("/equip/04.png", new IAction2() {
                         public void perform(Object object) {
-                            EquipScreen.imgIconEQ[3] = new mImage((Image) object);
+                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 3 && object instanceof Image) {
+                                EquipScreen.imgIconEQ[3] = new mImage((Image) object);
+                            }
                         }
                     });
                     mImage.createImage("/equip/05.png", new IAction2() {
                         public void perform(Object object) {
-                            EquipScreen.imgIconEQ[4] = new mImage((Image) object);
+                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 4 && object instanceof Image) {
+                                EquipScreen.imgIconEQ[4] = new mImage((Image) object);
+                            }
                         }
                     });
                     CRes.out("3 =============================> read Trang bi  type = 1 ");
                     byte[] bullets = null;
+                    indexBullet = 0;
 
                     for (int c = 0; c < 10; ++c) {
                         short lentBullet = msg.reader().readShort();
