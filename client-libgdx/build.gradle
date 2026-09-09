@@ -1,0 +1,81 @@
+allprojects {
+    group = 'vn.mobiarmy.hybrid'
+    version = '1.0.2'
+    ext.gdxVersion = '1.12.1'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 17
+        options.compilerArgs += ['-Xlint:deprecation', '-Xlint:unchecked']
+    }
+}
+
+project(':core') {
+    apply plugin: 'java-library'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    sourceSets.main.java.srcDirs = ['src']
+
+    dependencies {
+        api "com.badlogicgames.gdx:gdx:${gdxVersion}"
+        api "com.badlogicgames.gdx:gdx-box2d:${gdxVersion}"
+    }
+}
+
+project(':desktop') {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    sourceSets.main.java.srcDirs = ['src']
+    sourceSets.main.resources.srcDirs = ['../assets']
+
+    dependencies {
+        implementation project(':core')
+        implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:${gdxVersion}"
+        implementation "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-desktop"
+        implementation "com.badlogicgames.gdx:gdx-box2d-platform:${gdxVersion}:natives-desktop"
+    }
+
+    tasks.register('runClient', JavaExec) {
+        dependsOn classes
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'com.mygdx.game.DesktopLauncher'
+        workingDir = rootProject.projectDir
+        standardInput = System.in
+        jvmArgs '-Dfile.encoding=UTF-8'
+    }
+
+    tasks.register('dist', Jar) {
+        // runtimeClasspath contains project(':core') as core-1.0.1.jar. A custom
+        // Jar task does not automatically infer that archive-producing task,
+        // so make the dependency explicit before zipTree(runtimeClasspath).
+        dependsOn classes
+        dependsOn ':core:jar'
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/INDEX.LIST'
+        archiveFileName = 'WorkspaceData.jar'
+        manifest {
+            attributes 'Main-Class': 'com.mygdx.game.DesktopLauncher'
+        }
+        from sourceSets.main.output
+        from {
+            configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+    }
+}

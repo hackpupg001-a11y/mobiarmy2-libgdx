@@ -1,0 +1,163 @@
+name: Build Windows Portable EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'client-libgdx/**'
+      - '.github/workflows/build-windows-exe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    name: Windows EXE / Java 21 / LibGDX
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Temurin JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Python for verifier
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify source invariants
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          python tools/verify_source.py
+
+      - name: Show Java and Gradle versions
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          java -version
+          .\gradlew.bat --version
+
+      - name: Compile and build fat JAR
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          .\gradlew.bat --no-daemon clean :core:jar :desktop:dist --stacktrace
+
+      - name: Verify fat JAR
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          $jar = 'desktop\build\libs\WorkspaceData.jar'
+          if (-not (Test-Path $jar)) { throw "Missing fat JAR: $jar" }
+          $entries = & jar tf $jar
+          if ($entries -notcontains 'com/mygdx/game/DesktopLauncher.class') { throw 'DesktopLauncher missing from fat JAR' }
+          if ($entries -notcontains 'mod/ModSettings.class') { throw 'ModSettings missing from fat JAR' }
+          if ($entries -notcontains 'res/icon.png') { throw 'Game assets missing from fat JAR' }
+          $size = (Get-Item $jar).Length
+          if ($size -lt 1000000) { throw "Fat JAR unexpectedly small: $size bytes" }
+          Write-Host "[PASS] Fat JAR $size bytes"
+
+      - name: Build portable Windows app-image
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\portable | Out-Null
+          jpackage `
+            --type app-image `
+            --name DataViewer `
+            --app-version 1.0.2 `
+            --vendor "Local Workspace" `
+            --description "Local Data Viewer" `
+            --input desktop\build\libs `
+            --main-jar WorkspaceData.jar `
+            --main-class com.mygdx.game.DesktopLauncher `
+            --dest dist\portable `
+            --java-options "-Dfile.encoding=UTF-8"
+          if (-not (Test-Path 'dist\portable\DataViewer\DataViewer.exe')) { throw 'Portable DataViewer.exe was not created' }
+          Copy-Item windows\OPEN_ENDPOINT.bat dist\portable\DataViewer\OPEN_ENDPOINT.bat
+          Copy-Item windows\INFO.txt dist\portable\DataViewer\INFO.txt
+
+      - name: Build one-file portable EXE (.NET bootstrap, no installer)
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          .\windows\build-onefile-portable.ps1
+          if (-not (Test-Path 'dist\DataViewer-OneFile.exe')) { throw 'One-file portable EXE was not created' }
+
+      - name: Build Windows installer EXE
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          New-Item -ItemType Directory -Force -Path dist\installer | Out-Null
+          jpackage `
+            --type exe `
+            --name DataViewer `
+            --app-version 1.0.2 `
+            --vendor "Local Workspace" `
+            --description "Local Data Viewer" `
+            --input desktop\build\libs `
+            --main-jar WorkspaceData.jar `
+            --main-class com.mygdx.game.DesktopLauncher `
+            --dest dist\installer `
+            --java-options "-Dfile.encoding=UTF-8" `
+            --win-menu `
+            --win-shortcut `
+            --win-dir-chooser `
+            --win-per-user-install
+          $setup = Get-ChildItem dist\installer\*.exe | Select-Object -First 1
+          if (-not $setup) { throw 'Installer EXE was not created' }
+          Copy-Item $setup.FullName dist\DataViewer-Setup.exe -Force
+
+      - name: Verify PE executables
+        shell: pwsh
+        working-directory: client-libgdx
+        run: |
+          $files = @(
+            'dist\portable\DataViewer\DataViewer.exe',
+            'dist\DataViewer-OneFile.exe',
+            'dist\DataViewer-Setup.exe'
+          )
+          foreach ($f in $files) {
+            if (-not (Test-Path $f)) { throw "Missing $f" }
+            $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $f))
+            if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+              throw "$f is not a Windows PE executable"
+            }
+            Write-Host "[PASS] $f PE/MZ $($bytes.Length) bytes"
+          }
+
+      - name: Upload portable client
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Portable
+          path: client-libgdx/dist/portable/DataViewer/**
+          if-no-files-found: error
+          compression-level: 6
+
+      - name: Upload ONE-FILE portable client
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-OneFile-Portable
+          path: client-libgdx/dist/DataViewer-OneFile.exe
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Setup
+          path: client-libgdx/dist/DataViewer-Setup.exe
+          if-no-files-found: error
+          compression-level: 0

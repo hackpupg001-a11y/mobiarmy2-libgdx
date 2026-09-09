@@ -1,0 +1,28 @@
+Data Viewer - Windows
+
+PC controls:
+  W / A / S / D = Up / Left / Down / Right
+  Q = Left softkey (menu/function on left)
+  E = Right softkey (back/function on right)
+  SPACE = Center / OK / Fire
+  Hold SPACE = hold the original center/fire key until released
+  Arrow keys + Enter remain supported.
+
+Mod hotkeys:
+  F6 = 360 aim on/off
+  F7 = angle/wind HUD on/off
+  F8 = auto-click on/off
+  F9 = mod overlay on/off
+
+Outputs:
+  dist\portable\DataViewer\DataViewer.exe
+    Normal jpackage portable app-image. Keep its app/runtime folders beside it.
+
+  dist\DataViewer-Portable-OneFile.exe
+    Single-file portable distribution. No install wizard. On first launch it
+    extracts its bundled runtime/app into %%LOCALAPPDATA%%\DataViewerPortable\1.0.1
+    and then launches the game. Later launches reuse that cache.
+
+Default server: 127.0.0.1:8122
+Use RUN_CUSTOM_SERVER.bat from the folder-portable build to set another endpoint.
+You can also set ARMY2_HOST / ARMY2_PORT / ARMY2_WEB_PORT environment variables.

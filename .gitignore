@@ -1,0 +1,16 @@
+# Gradle / IDE
+.gradle/
+**/build/
+.idea/
+.vscode/
+*.iml
+
+# Generated distributions / runtime state
+client-libgdx/dist/
+client-libgdx/rms/
+client-libgdx/logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
