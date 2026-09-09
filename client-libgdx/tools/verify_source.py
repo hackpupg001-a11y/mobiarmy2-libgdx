@@ -170,7 +170,7 @@ check('battle A/D drives CPlayer movement', 'leftHeld = CCanvas.keyHold[4]' in c
 check('battle W/S drives aiming', 'CCanvas.keyHold[2]' in cp and 'CCanvas.keyHold[8]' in cp and 'this.aimUp()' in cp and 'this.aimDown()' in cp)
 check('battle Space is hold/release fire', 'desktopFireHeld' in cp and 'this.holdFire()' in cp and 'this.fire()' in cp)
 check('battle movement release syncs position', 'GameService.gI().move((short) this.x, (short) this.y)' in cp)
-check('battle Q/E softkeys exist', 'this.left = new Command("Item"' in gs and 'this.right = new Command("Menu"' in gs)
+check('battle Q/E softkeys use inherited CScreen fields', 'super.left = new Command("Item"' in gs and 'super.right = new Command("Menu"' in gs and 'this.left = new Command("Item"' not in gs and 'this.right = new Command("Menu"' not in gs)
 check('battle item grid uses WASD + Space', 'handleDesktopItemSelector()' in gs and 'useSelectedItemFromKeyboard()' in gs and 'CCanvas.keyReleased[5]' in gs)
 check('battle pause menu uses W/S Space Q E', 'handleKeyboardInput()' in pause and 'CCanvas.keyPressed[13]' in pause and 'CCanvas.keyPressed[12]' in pause)
 check('Hybrid room selection requests cmd7 area list', '!this.isEmptyRoom' in room2 and 'GameService.gI().requestBoardList(info.id)' in room2)

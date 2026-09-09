@@ -414,7 +414,7 @@ public class GameScr extends CScreen {
         this.initGamescr();
         // Desktop/J2ME-style battle softkeys. Q opens the item selector, E opens
         // the battle menu; CCanvas dispatches these globally as left/right keys.
-        this.left = new Command("Item", new IAction() {
+        super.left = new Command("Item", new IAction() {
             public void perform() {
                 if (GameScr.pm != null && GameScr.pm.isYourTurn()
                         && CCanvas.currentDialog == null
@@ -425,7 +425,7 @@ public class GameScr extends CScreen {
                 }
             }
         });
-        this.right = new Command("Menu", new IAction() {
+        super.right = new Command("Menu", new IAction() {
             public void perform() {
                 if (GameScr.this.isSelectItem) {
                     GameScr.this.isSelectItem = false;
