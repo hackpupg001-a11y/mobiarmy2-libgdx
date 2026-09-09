@@ -1,6 +1,7 @@
 package screen;
 
 import CLib.mGraphics;
+import CLib.LibSysTem;
 import CLib.mImage;
 import Equipment.PlayerEquip;
 import coreLG.CCanvas;
@@ -12,6 +13,9 @@ import item.Item;
 import item.MyItemIcon;
 
 import java.util.Vector;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
 
 import map.MM;
 import model.CRes;
@@ -142,7 +146,6 @@ public class PrepareScr extends CScreen {
     }
 
     public static void init() {
-        CCanvas.roomListScr = new RoomListScr();
         int mapCount = MM.NUM_MAP & 255;
         if (mapCount <= 0) {
             // On a fresh login Hybrid 2.3 sends icondata2 before valuesdata2.
@@ -152,6 +155,10 @@ public class PrepareScr extends CScreen {
             CRes.out("[MAP-PREVIEW] deferred until valuesdata2/map metadata arrives");
             return;
         }
+        // RoomListScr has static arrays sized from MM.NUM_MAP. Creating it before
+        // valuesdata2 arrives permanently poisons those arrays at length 0 on a
+        // fresh login (icondata2 is delivered first by the Hybrid server).
+        CCanvas.roomListScr = new RoomListScr();
         imgMap = new mImage[mapCount];
 
         int i;
@@ -189,10 +196,20 @@ public class PrepareScr extends CScreen {
         // genuinely unavailable.
         for (i = 0; i < imgMap.length; ++i) {
             if (imgMap[i] == null) {
-                String classPath = CCanvas.getClassPathConfig(CONFIG.PATH_MAP + "map" + i + ".png");
-                mImage fallback = mImage.createImageAll(classPath);
-                if (fallback != null) {
-                    imgMap[i] = fallback;
+                // Image.createImage() already prefixes LibSysTem.res ("res").
+                // getClassPathConfig() returns /res/... on desktop, which used to
+                // become res/res/map/... and throw on LibGDX's render thread.
+                String imagePath = "/" + CONFIG.PATH_MAP + "map" + i + ".png";
+                try {
+                    FileHandle handle = Gdx.files.internal(LibSysTem.res + imagePath);
+                    if (handle != null && handle.exists()) {
+                        imgMap[i] = mImage.createImageAll(imagePath);
+                    }
+                } catch (RuntimeException resourceError) {
+                    CRes.out("[MAP-PREVIEW] packaged fallback unavailable " + imagePath + ": " + resourceError);
+                }
+                if (imgMap[i] == null && randomMap != null) {
+                    imgMap[i] = randomMap;
                 }
             }
             ensureMapName(i);

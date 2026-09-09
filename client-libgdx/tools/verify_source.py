@@ -236,6 +236,29 @@ check('formula equipment tolerates missing client templates', 'Formula output te
 check('equip click validates player/template bounds', 'player equipment state is not ready' in equip_scr and 'missing equipID gun=' in equip_scr)
 check('equip click exceptions are logged instead of silently swallowed', 'Equip click failed safely:' in equip_scr)
 
+# FIX16: fresh-login crash regression gates.
+image_src = text('core/src/CLib/Image.java')
+graphics_src = text('core/src/CLib/mGraphics.java')
+room_map = text('core/src/screen/RoomListScr.java')
+check('fresh login does not construct RoomListScr before map metadata',
+      prepare.index('int mapCount = MM.NUM_MAP & 255;') < prepare.index('CCanvas.roomListScr = new RoomListScr();'))
+check('map fallback no longer creates res/res path',
+      'getClassPathConfig(CONFIG.PATH_MAP + "map" + i + ".png")' not in prepare
+      and 'String imagePath = "/" + CONFIG.PATH_MAP + "map" + i + ".png";' in prepare)
+check('map fallback checks packaged resource existence before texture load',
+      'Gdx.files.internal(LibSysTem.res + imagePath)' in prepare and 'handle.exists()' in prepare)
+check('room map icon array resizes after NUM_MAP metadata arrives',
+      '_iconX == null || _iconX.length < nMap' in room_map and '_iconX = new int[nMap];' in room_map)
+check('room map static state is independent of pre-metadata NUM_MAP',
+      'nMap = 0;' in room_map and '_iconX = new int[0];' in room_map and '_iconX = new int[MM.NUM_MAP];' not in room_map)
+check('room map tolerates boss-map metadata arriving later',
+      'PrepareScr.mapBossID == null ? 0 : PrepareScr.mapBossID.length' in room_map)
+check('async image loader catches optional-resource failures on render thread',
+      '[IMAGE] missing resource:' in image_src and '[IMAGE] packed image decode failed:' in image_src
+      and image_src.count('catch (RuntimeException imageError)') >= 4)
+check('common image drawing skips pending/null textures',
+      graphics_src.count('img.image.texture == null') >= 2 and graphics_src.count('img.image.texture != null') >= 4 and 'tx.image.tRegion == null' in graphics_src)
+
 failed = [n for n, ok, _ in checks if not ok]
 print(f'\nSUMMARY: {len(checks)-len(failed)}/{len(checks)} checks PASS')
 if failed:

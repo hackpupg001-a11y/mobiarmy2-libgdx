@@ -24,11 +24,19 @@ public class Image {
       new AssetManager();
       Gdx.app.postRunnable(new Runnable() {
          public void run() {
-            Texture t = null;
-            t = new Texture(Gdx.files.internal(LibSysTem.res + url));
-            img.texture = t;
-            img.width = img.texture.getWidth();
-            img.height = img.texture.getHeight();
+            try {
+               FileHandle handle = Gdx.files.internal(LibSysTem.res + url);
+               if (handle == null || !handle.exists()) {
+                  CRes.out("[IMAGE] missing resource: " + LibSysTem.res + url);
+                  return;
+               }
+               Texture t = new Texture(handle);
+               img.texture = t;
+               img.width = img.texture.getWidth();
+               img.height = img.texture.getHeight();
+            } catch (RuntimeException imageError) {
+               CRes.out("[IMAGE] load failed " + url + ": " + imageError);
+            }
          }
       });
       return img;
@@ -37,23 +45,31 @@ public class Image {
    public static void createImage(final String url, final IAction2 action2) {
       Gdx.app.postRunnable(new Runnable() {
          public void run() {
-            Image img = new Image();
-            Texture t = null;
-            FileHandle file = null;
-            if (CCanvas.isPc()) {
-               file = Gdx.files.local(LibSysTem.res + url);
-            } else {
-               file = Gdx.files.internal(LibSysTem.res + url);
+            try {
+               Image img = new Image();
+               FileHandle file;
+               if (CCanvas.isPc()) {
+                  file = Gdx.files.local(LibSysTem.res + url);
+                  if (file == null || !file.exists()) {
+                     file = Gdx.files.internal(LibSysTem.res + url);
+                  }
+               } else {
+                  file = Gdx.files.internal(LibSysTem.res + url);
+               }
+               if (file == null || !file.exists()) {
+                  CRes.out("[IMAGE] missing async resource: " + LibSysTem.res + url);
+                  return;
+               }
+               Texture t = new Texture(file);
+               img.texture = t;
+               img.width = img.texture.getWidth();
+               img.height = img.texture.getHeight();
+               if (action2 != null) {
+                  action2.perform(img);
+               }
+            } catch (RuntimeException imageError) {
+               CRes.out("[IMAGE] async load failed " + url + ": " + imageError);
             }
-
-            t = new Texture(file);
-            img.texture = t;
-            img.width = img.texture.getWidth();
-            img.height = img.texture.getHeight();
-            if (action2 != null) {
-               action2.perform(img);
-            }
-
          }
       });
    }
@@ -104,15 +120,23 @@ public class Image {
       final Image img = new Image();
       Gdx.app.postRunnable(new Runnable() {
          public void run() {
-            Pixmap p = new Pixmap(encodedData, offset, len);
-            img.texture = new Texture(p, Pixmap.Format.RGBA8888, false);
-            img.width = img.texture.getWidth();
-            img.height = img.texture.getHeight();
-            img.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            if (callback != null) {
-               callback.perform(img);
+            Pixmap p = null;
+            try {
+               p = new Pixmap(encodedData, offset, len);
+               img.texture = new Texture(p, Pixmap.Format.RGBA8888, false);
+               img.width = img.texture.getWidth();
+               img.height = img.texture.getHeight();
+               img.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+               if (callback != null) {
+                  callback.perform(img);
+               }
+            } catch (RuntimeException imageError) {
+               CRes.out("[IMAGE] packed image decode failed: " + imageError);
+            } finally {
+               if (p != null) {
+                  p.dispose();
+               }
             }
-
          }
       });
       return img;
@@ -122,12 +146,20 @@ public class Image {
       final Image img = new Image();
       Gdx.app.postRunnable(new Runnable() {
          public void run() {
-            Pixmap p = new Pixmap(encodedData, offset, len);
-            img.texture = new Texture(p, Pixmap.Format.RGBA8888, false);
-            img.width = img.texture.getWidth();
-            img.height = img.texture.getHeight();
-            img.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            p.dispose();
+            Pixmap p = null;
+            try {
+               p = new Pixmap(encodedData, offset, len);
+               img.texture = new Texture(p, Pixmap.Format.RGBA8888, false);
+               img.width = img.texture.getWidth();
+               img.height = img.texture.getHeight();
+               img.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            } catch (RuntimeException imageError) {
+               CRes.out("[IMAGE] packed image decode failed: " + imageError);
+            } finally {
+               if (p != null) {
+                  p.dispose();
+               }
+            }
          }
       });
       return img;

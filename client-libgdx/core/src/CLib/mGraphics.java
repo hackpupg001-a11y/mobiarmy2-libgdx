@@ -174,6 +174,9 @@ public class mGraphics {
     }
 
     public void drawTextureRegion(mImage tx, int x, int y, int alg) {
+        if (tx == null || tx.image == null || tx.image.tRegion == null) {
+            return;
+        }
         x *= zoomLevel;
         y *= zoomLevel;
         if (this.isTranslate) {
@@ -224,7 +227,7 @@ public class mGraphics {
     }
 
     public void drawRegion(mImage img, int x_src, int y_src, int width, int height, int flip, int x_dest, int y_dest, int anchor, boolean useClip) {
-        if (img != null) {
+        if (img != null && img.image != null && img.image.texture != null) {
             x_dest *= zoomLevel;
             y_dest *= zoomLevel;
             this._drawRegion(img.image.texture, x_src, y_src, width, height, flip, x_dest, y_dest, anchor, useClip, false);
@@ -232,7 +235,7 @@ public class mGraphics {
     }
 
     public void drawRegion(mImage img, int x_src, int y_src, int width, int height, int flip, int x_dest, int y_dest, int anchor, boolean isScale, boolean useClip) {
-        if (img != null) {
+        if (img != null && img.image != null && img.image.texture != null) {
             x_dest *= zoomLevel;
             y_dest *= zoomLevel;
             this._drawRegion(img.image.texture, x_src, y_src, width, height, flip, x_dest, y_dest, anchor, useClip, isScale);
@@ -240,7 +243,7 @@ public class mGraphics {
     }
 
     public void drawRegionNotSetClip(mImage img, int x, int y, int arg3, int arg4, int arg5, int arg6, int arg7, int anchor) {
-        if (img != null) {
+        if (img != null && img.image != null && img.image.texture != null) {
             x *= zoomLevel;
             y *= zoomLevel;
             arg3 *= zoomLevel;
@@ -269,7 +272,7 @@ public class mGraphics {
     }
 
     public void drawImageMap(mImage img, int x, int y) {
-        if (img != null) {
+        if (img != null && img.image != null && img.image.texture != null) {
             x *= zoomLevel;
             y *= zoomLevel;
             if (this.isTranslate) {
@@ -284,12 +287,18 @@ public class mGraphics {
     }
 
     public void drawImage(mImage img, int x, int y, int anchor, boolean useClip, boolean isScale) {
+        if (img == null || img.image == null || img.image.texture == null) {
+            return;
+        }
         x *= zoomLevel;
         y *= zoomLevel;
         this._drawRegion(img.image.texture, 0, 0, img.image._getWidth(), img.image._getHeight(), 0, x, y, anchor, useClip, isScale);
     }
 
     public void drawImage(mImage img, int x, int y, int anchor, boolean useClip) {
+        if (img == null || img.image == null || img.image.texture == null) {
+            return;
+        }
         x *= zoomLevel;
         y *= zoomLevel;
         this._drawRegion(img.image.texture, 0, 0, img.image._getWidth(), img.image._getHeight(), 0, x, y, anchor, useClip, false);
