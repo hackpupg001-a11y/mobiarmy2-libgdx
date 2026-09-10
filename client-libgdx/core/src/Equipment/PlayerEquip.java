@@ -79,43 +79,31 @@ public class PlayerEquip {
     }
 
     public static Equip createEquip(byte glass, byte type, short id) {
+        Equip e = new Equip();
         Equip tam = getEquip(glass, type, id);
-        if (tam == null) {
+        if (tam != null) {
+            e.glass = tam.glass;
+            e.type = tam.type;
+            e.id = tam.id;
+            e.name = tam.name;
+            e.date = tam.date;
+            e.x = tam.x;
+            e.y = tam.y;
+            e.dx = tam.dx;
+            e.dy = tam.dy;
+            e.w = tam.w;
+            e.h = tam.h;
+            e.level = tam.level;
+            e.frame = tam.frame;
+            e.icon = tam.icon;
+            e.xu = tam.xu;
+            e.luong = tam.luong;
+            e.bullet = tam.bullet;
+            e.index = tam.index;
+            return e;
+        } else {
             return null;
         }
-        Equip e = new Equip();
-        e.glass = tam.glass;
-        e.type = tam.type;
-        e.id = tam.id;
-        e.name = tam.name;
-        e.date = tam.date;
-        e.x = tam.x;
-        e.y = tam.y;
-        e.dx = tam.dx;
-        e.dy = tam.dy;
-        e.w = tam.w;
-        e.h = tam.h;
-        e.level = tam.level;
-        e.level2 = tam.level2;
-        e.frame = tam.frame;
-        e.icon = tam.icon;
-        e.xu = tam.xu;
-        e.luong = tam.luong;
-        e.bullet = tam.bullet;
-        e.index = tam.index;
-        e.slot = tam.slot;
-        e.vip = tam.vip;
-        e.addAbilityFromEquip(tam);
-        if (tam.shop_ability != null) {
-            e.shop_ability = tam.shop_ability.clone();
-        }
-        if (tam.shop_percen != null) {
-            e.shop_percen = tam.shop_percen.clone();
-        }
-        if (tam.shop_attAddPoint != null) {
-            e.shop_attAddPoint = tam.shop_attAddPoint.clone();
-        }
-        return e;
     }
 
     public void paintGiap(int x, int y, int look, int frame, mGraphics g) {
@@ -153,32 +141,46 @@ public class PlayerEquip {
 
     }
 
+    public boolean hasBaseGun() {
+        return this.equips != null && this.equips.length > 0 && this.equips[0] != null;
+    }
+
+    public int getBulletIdOrDefault() {
+        return hasBaseGun() ? this.equips[0].bullet : 0;
+    }
+
     public void paintFace(int x, int y, int look, int frame, mGraphics g) {
-        if (g == null || this.equips == null || this.equips.length == 0 || this.equips[0] == null) {
+        if (!hasBaseGun()) {
             return;
         }
-        int glassIndex = this.equips[0].glass & 255;
-        if (CPlayer.pImg == null || glassIndex >= CPlayer.pImg.length) {
+        int glassId = this.equips[0].glass;
+        if (glassId < 0 || glassId >= CPlayer.pImg.length) {
             return;
         }
-        mImage img = CPlayer.pImg[glassIndex];
+        mImage img = CPlayer.pImg[glassId];
         if (img == null || img.image == null) {
             return;
         }
         int W = img.image.getWidth();
         int H = img.image.getHeight() / 10;
-        if (W <= 0 || H <= 0 || frame < 0 || frame * H + H > img.image.getHeight()) {
+        if (W <= 0 || H <= 0 || frame < 0 || frame >= 10) {
             return;
         }
         g.drawRegion(img, 0, frame * H, W, H, look, x, y, mGraphics.BOTTOM | mGraphics.HCENTER, false);
     }
 
     public void paint(mGraphics g, int look, int frame, int x, int y) {
-        this.paintSung(x, y, look, frame, g);
-        this.paintCanh(x, y, look, frame, g);
-        this.paintFace(x, y, look, frame, g);
-        this.paintNon(x, y, look, frame, g);
-        this.paintGiap(x, y, look, frame, g);
-        this.paintKinh(x, y, look, frame, g);
+        // V10 protects the whole composed equipment render from malformed/missing data.
+        // Keep that fault isolation, but also guard the known null paths above.
+        try {
+            this.paintSung(x, y, look, frame, g);
+            this.paintCanh(x, y, look, frame, g);
+            this.paintFace(x, y, look, frame, g);
+            this.paintNon(x, y, look, frame, g);
+            this.paintGiap(x, y, look, frame, g);
+            this.paintKinh(x, y, look, frame, g);
+        } catch (Exception ignored) {
+            // A bad cosmetic/equipment frame must never take down the battle screen.
+        }
     }
 }

@@ -1,0 +1,1015 @@
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/V10_FIX_NOTES.md /mnt/data/army2_work/client-libgdx/V10_FIX_NOTES.md
+--- /mnt/data/army2_baseline/client-libgdx/V10_FIX_NOTES.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/V10_FIX_NOTES.md	2026-09-10 04:33:51.870260377 +0000
+@@ -0,0 +1,24 @@
++# LibGDX V10 compatibility fixes
++
++Reference: user-supplied `99999999.jar` (MobiArmy 2.3.0 V10).
++
++## Fixed
++
++- Equipment definition/player equipment parsing hardened for the 2.3/V10 wire layout.
++- Five equipment IDs are read before resolving `PlayerEquip`; invalid gun slots no longer corrupt parsing.
++- Async LibGDX bullet-image decoding now preserves the packet bullet index.
++- Equipment rendering tolerates missing/late images and missing equipment slots instead of crashing the battle screen.
++- Map metadata parser no longer reuses the outer map index while reading the five map values.
++- Full map metadata refresh clears stale entries before replacing the table.
++- V10 normal aiming limits restored: left side >= 91 degrees, right side <= 89 degrees, plus per-gun angle lock.
++- The 360-degree option is display-only and no longer mutates the gameplay/network FIRE angle.
++- V10 trajectory preview added for guns 0..9, including spread and special gun 6/7/8/9 preview behavior.
++- FIRE packet layout remains the original 2.3/V10 layout; preview rendering never writes the network angle.
++- Battle player creation validates packet array/list bounds and isolates bad player/equipment resources.
++- Post-start consumable bookkeeping and equipment DB-key updates are null-safe.
++
++## Verification
++
++- `python3 tools/verify_source.py`: 117/117 PASS.
++- `javac` parse/type smoke check on all modified Java files: no syntax/type-like diagnostics from the patches; compilation then stops on unavailable external LibGDX packages.
++- Full Gradle compilation was not possible in the current container because Gradle/LibGDX dependencies are not cached and external dependency download is unavailable.
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/Equipment/Equip.java /mnt/data/army2_work/client-libgdx/core/src/Equipment/Equip.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/Equipment/Equip.java	2024-11-07 20:41:02.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/Equipment/Equip.java	2026-09-10 04:28:10.655665866 +0000
+@@ -347,6 +347,14 @@
+ 
+     public void drawImage(mGraphics g, int Look, int Frame, int X, int Y) {
+         if (!this.notPaint) {
++            int glassIndex = this.glass & 255;
++            if (glassIndex >= PlayerEquip.imgData.length || PlayerEquip.imgData[glassIndex] == null ||
++                    PlayerEquip.imgData[glassIndex].image == null || this.x == null || this.y == null ||
++                    this.w == null || this.h == null || this.dx == null || this.dy == null ||
++                    Frame < 0 || Frame >= this.x.length || Frame >= this.y.length ||
++                    Frame >= this.w.length || Frame >= this.h.length || Frame >= this.dx.length || Frame >= this.dy.length) {
++                return;
++            }
+             int W = 0;
+             int H = 0;
+             if (this.glass == 0 || this.glass == 1 || this.glass == 2 || this.glass == 4 || this.glass == 5 || this.glass == 8 || this.glass == 9) {
+@@ -371,12 +379,12 @@
+ 
+             if (Frame < 6) {
+                 if (Look == 0) {
+-                    g.drawRegion(PlayerEquip.imgData[this.glass], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
++                    g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
+                     Font.smallFont.drawString(g, " ", X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
+                 }
+ 
+                 if (Look == 2) {
+-                    g.drawRegion(PlayerEquip.imgData[this.glass], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40, mGraphics.TOP | mGraphics.RIGHT, false);
++                    g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40, mGraphics.TOP | mGraphics.RIGHT, false);
+                     Font.smallFont.drawString(g, "  ", X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40, 0, false);
+                 }
+             }
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/Equipment/PlayerEquip.java /mnt/data/army2_work/client-libgdx/core/src/Equipment/PlayerEquip.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/Equipment/PlayerEquip.java	2024-11-07 20:41:02.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/Equipment/PlayerEquip.java	2026-09-10 04:23:52.631225502 +0000
+@@ -47,6 +47,9 @@
+     }
+ 
+     public static EquipGlass getEquipGlass(byte id) {
++        if (playerData == null) {
++            return null;
++        }
+         for (int i = 0; i < playerData.size(); ++i) {
+             EquipGlass eq = (EquipGlass) playerData.elementAt(i);
+             if (eq != null && eq.glassID == id) {
+@@ -138,22 +141,46 @@
+ 
+     }
+ 
++    public boolean hasBaseGun() {
++        return this.equips != null && this.equips.length > 0 && this.equips[0] != null;
++    }
++
++    public int getBulletIdOrDefault() {
++        return hasBaseGun() ? this.equips[0].bullet : 0;
++    }
++
+     public void paintFace(int x, int y, int look, int frame, mGraphics g) {
+-        mImage img = null;
+-        img = CPlayer.pImg[this.equips[0].glass];
+-        int W = 0;
+-        int H = 0;
+-        W = img.image.getWidth();
+-        H = img.image.getHeight() / 10;
++        if (!hasBaseGun()) {
++            return;
++        }
++        int glassId = this.equips[0].glass;
++        if (glassId < 0 || glassId >= CPlayer.pImg.length) {
++            return;
++        }
++        mImage img = CPlayer.pImg[glassId];
++        if (img == null || img.image == null) {
++            return;
++        }
++        int W = img.image.getWidth();
++        int H = img.image.getHeight() / 10;
++        if (W <= 0 || H <= 0 || frame < 0 || frame >= 10) {
++            return;
++        }
+         g.drawRegion(img, 0, frame * H, W, H, look, x, y, mGraphics.BOTTOM | mGraphics.HCENTER, false);
+     }
+ 
+     public void paint(mGraphics g, int look, int frame, int x, int y) {
+-        this.paintSung(x, y, look, frame, g);
+-        this.paintCanh(x, y, look, frame, g);
+-        this.paintFace(x, y, look, frame, g);
+-        this.paintNon(x, y, look, frame, g);
+-        this.paintGiap(x, y, look, frame, g);
+-        this.paintKinh(x, y, look, frame, g);
++        // V10 protects the whole composed equipment render from malformed/missing data.
++        // Keep that fault isolation, but also guard the known null paths above.
++        try {
++            this.paintSung(x, y, look, frame, g);
++            this.paintCanh(x, y, look, frame, g);
++            this.paintFace(x, y, look, frame, g);
++            this.paintNon(x, y, look, frame, g);
++            this.paintGiap(x, y, look, frame, g);
++            this.paintKinh(x, y, look, frame, g);
++        } catch (Exception ignored) {
++            // A bad cosmetic/equipment frame must never take down the battle screen.
++        }
+     }
+ }
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/coreLG/CCanvas.java /mnt/data/army2_work/client-libgdx/core/src/coreLG/CCanvas.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/coreLG/CCanvas.java	2026-09-09 10:33:44.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/coreLG/CCanvas.java	2026-09-10 04:30:19.096211737 +0000
+@@ -572,6 +572,9 @@
+                     MM.NUM_MAP = len6;
+                     MM.mapName = new String[len6];
+                     MM.mapFileName = new String[len6];
++                    // This packet is a full replacement. Keeping old entries makes
++                    // createBackGround() pick stale metadata after a resource refresh.
++                    MM.mapFiles.removeAllElements();
+ 
+                     for (i = 0; i < len6; ++i) {
+                         byte fileID = msg.reader().readByte();
+@@ -580,8 +583,10 @@
+                         msg.reader().read(fData, 0, maxDame);
+                         short[] values = new short[5];
+ 
+-                        for (i = 0; i < 5; ++i) {
+-                            values[i] = msg.reader().readShort();
++                        // Keep the map loop index intact. V10 uses a separate counter here;
++                        // reusing i corrupts the map index and can leave map data half-loaded.
++                        for (int valueIndex = 0; valueIndex < 5; ++valueIndex) {
++                            values[valueIndex] = msg.reader().readShort();
+                         }
+ 
+                         MM.mapName[i] = msg.reader().readUTF();
+@@ -593,12 +598,12 @@
+ 
+                     CRes.out("=============================> MM.mapFileName  " + len6);
+                 } catch (Exception var23) {
++                    CRes.err("Failed to parse map data: " + var23);
++                    var23.printStackTrace();
+                 }
+                 break;
+             case 1:
+                 CRes.out("=============================> read Trang bi  type = 1 ");
+-                PlayerEquip.playerData = new Vector();
+-
+                 try {
+                     Vector<EquipGlass> vGlass = new Vector();
+                     byte nglass = msg.reader().readByte();
+@@ -670,10 +675,26 @@
+                         vGlass.addElement(eqGlass);
+                     }
+ 
++                    // Publish only after the complete equipment definition table was parsed.
+                     PlayerEquip.addGlassEquip(vGlass);
++                    if (TerrainMidlet.myInfo != null) {
++                        TerrainMidlet.myInfo.getMyEquip(10);
++                        if (TerrainMidlet.myInfo.isVip) {
++                            TerrainMidlet.myInfo.getVipEquip();
++                        }
++                    }
+                     short lenIcon = msg.reader().readShort();
+                     byte[] iconImg = new byte[lenIcon];
+                     msg.reader().read(iconImg, 0, lenIcon);
++                    // V10 keeps this sprite sheet from the packet. Do the same instead of
++                    // silently discarding it; decoding is posted to the LibGDX render thread.
++                    if (lenIcon > 0) {
++                        mImage.createImage(iconImg, 0, lenIcon, new IAction2() {
++                            public void perform(Object object) {
++                                EquipScreen.imgIcon = new mImage((Image) object);
++                            }
++                        });
++                    }
+                     CRes.out("2 =============================> read Trang bi  type = 1 ");
+                     mImage.createImage("/equip/01.png", new IAction2() {
+                         public void perform(Object object) {
+@@ -701,25 +722,30 @@
+                         }
+                     });
+                     CRes.out("3 =============================> read Trang bi  type = 1 ");
+-                    byte[] bullets = null;
+-
++                    // V10 assigns each bullet image to the same packet index. LibGDX decodes
++                    // asynchronously, so using one shared incrementing callback index races and
++                    // can associate the wrong image with a bullet. Capture the packet index.
++                    CCanvas.indexBullet = 0;
+                     for (int c = 0; c < 10; ++c) {
+                         short lentBullet = msg.reader().readShort();
+-                        bullets = new byte[lentBullet];
+-                        msg.reader().read(bullets, 0, lentBullet);
+-                        mImage.createImage((byte[]) bullets, 0, lentBullet, (IAction2) (new IAction2() {
+-                            public void perform(Object object) {
+-                                try {
+-                                    PlayerEquip.bullets[CCanvas.indexBullet] = new mImage((Image) object);
+-                                    CCanvas.indexBullet = CCanvas.indexBullet + 1;
+-                                } catch (Exception var3) {
++                        final byte[] bulletData = new byte[lentBullet];
++                        msg.reader().read(bulletData, 0, lentBullet);
++                        final int bulletIndex = c;
++                        if (lentBullet > 0) {
++                            mImage.createImage(bulletData, 0, lentBullet, new IAction2() {
++                                public void perform(Object object) {
++                                    try {
++                                        PlayerEquip.bullets[bulletIndex] = new mImage((Image) object);
++                                    } catch (Exception ex) {
++                                        CRes.err("Failed to decode bullet image " + bulletIndex + ": " + ex);
++                                    }
+                                 }
+-
+-                            }
+-                        }));
++                            });
++                        } else {
++                            PlayerEquip.bullets[bulletIndex] = null;
++                        }
+                     }
+-
+-                    bullets = null;
++                    CCanvas.indexBullet = 10;
+                     CRes.out("===================> create PlayerEquip.playerData to set myEquip!");
+                     CRes.out("__ =============================> read Trang bi  type = 1 have PlayerEquip.playerData " + (PlayerEquip.playerData != null));
+                     CRes.out("4 =============================> read Trang bi  type = 1 !!!!! DONE!!!!");
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/mod/ModSettings.java /mnt/data/army2_work/client-libgdx/core/src/mod/ModSettings.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/mod/ModSettings.java	2026-09-08 16:50:56.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/mod/ModSettings.java	2026-09-10 04:23:52.631755178 +0000
+@@ -9,7 +9,7 @@
+ public final class ModSettings {
+     private static final Preferences PREFS = Preferences.userNodeForPackage(ModSettings.class);
+ 
+-    public static volatile boolean angle360 = PREFS.getBoolean("angle360", true);
++    public static volatile boolean angle360 = PREFS.getBoolean("angle360", false);
+     public static volatile boolean showAimHud = PREFS.getBoolean("showAimHud", true);
+     public static volatile boolean autoClick = PREFS.getBoolean("autoClick", false);
+     public static volatile boolean showOverlay = PREFS.getBoolean("showOverlay", true);
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/model/PlayerInfo.java /mnt/data/army2_work/client-libgdx/core/src/model/PlayerInfo.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/model/PlayerInfo.java	2024-11-07 20:41:02.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/model/PlayerInfo.java	2026-09-10 04:27:48.786028667 +0000
+@@ -67,8 +67,11 @@
+ 
+     public void setAllEquipEffect() {
+         this.getAttribute();
++        if (this.myEquip == null || this.myEquip.equips == null) {
++            return;
++        }
+ 
+-        for (int i = 0; i < 5; ++i) {
++        for (int i = 0; i < this.myEquip.equips.length && i < 5; ++i) {
+             if (this.myEquip.equips[i] != null) {
+                 this.myEquip.equips[i].setInvAtribute();
+                 this.addCurrEquip(this.myEquip.equips[i]);
+@@ -79,20 +82,30 @@
+ 
+     public void getMyEquip(int index) {
+         CRes.err(" ================> getMyEquip() " + index);
+-        short[] sung = new short[]{this.gun, 0, this.equipID[this.gun][0]};
+-        short[] non = new short[]{this.gun, 1, this.equipID[this.gun][1]};
+-        short[] giap = new short[]{this.gun, 2, this.equipID[this.gun][2]};
+-        short[] kinh = new short[]{this.gun, 3, this.equipID[this.gun][3]};
+-        short[] canh = new short[]{this.gun, 4, this.equipID[this.gun][4]};
++        int gunSlot = this.gun & 255;
++        if (gunSlot >= this.equipID.length) {
++            this.myEquip = new PlayerEquip();
++            return;
++        }
++        short[] sung = new short[]{this.gun, 0, this.equipID[gunSlot][0]};
++        short[] non = new short[]{this.gun, 1, this.equipID[gunSlot][1]};
++        short[] giap = new short[]{this.gun, 2, this.equipID[gunSlot][2]};
++        short[] kinh = new short[]{this.gun, 3, this.equipID[gunSlot][3]};
++        short[] canh = new short[]{this.gun, 4, this.equipID[gunSlot][4]};
+         this.myEquip = new PlayerEquip(new short[][]{sung, non, giap, kinh, canh});
+     }
+ 
+     public void getVipEquip() {
+-        short[] sung = new short[]{this.gun, 0, this.equipVipID[this.gun][0]};
+-        short[] non = new short[]{this.gun, 1, this.equipVipID[this.gun][1]};
+-        short[] giap = new short[]{this.gun, 2, this.equipVipID[this.gun][2]};
+-        short[] kinh = new short[]{this.gun, 3, this.equipVipID[this.gun][3]};
+-        short[] canh = new short[]{this.gun, 4, this.equipVipID[this.gun][4]};
++        int gunSlot = this.gun & 255;
++        if (gunSlot >= this.equipVipID.length) {
++            this.myVipEquip = new PlayerEquip();
++            return;
++        }
++        short[] sung = new short[]{this.gun, 0, this.equipVipID[gunSlot][0]};
++        short[] non = new short[]{this.gun, 1, this.equipVipID[gunSlot][1]};
++        short[] giap = new short[]{this.gun, 2, this.equipVipID[gunSlot][2]};
++        short[] kinh = new short[]{this.gun, 3, this.equipVipID[gunSlot][3]};
++        short[] canh = new short[]{this.gun, 4, this.equipVipID[gunSlot][4]};
+         this.myVipEquip = new PlayerEquip(new short[][]{sung, non, giap, kinh, canh});
+     }
+ 
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/network/MessageHandler.java /mnt/data/army2_work/client-libgdx/core/src/network/MessageHandler.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/network/MessageHandler.java	2026-09-09 04:24:08.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/network/MessageHandler.java	2026-09-10 04:30:36.296056551 +0000
+@@ -286,12 +286,16 @@
+                                 playerInfo.level2 = msg.reader().readUnsignedByte();
+                                 playerInfo.getQuanHam();
+                                 playerInfo.gun = msg.reader().readByte();
++                                int gunSlot = playerInfo.gun & 255;
+                                 int i = 0;
+                                 while (i < 5) {
+-                                    playerInfo.equipID[playerInfo.gun][i] = msg.reader().readShort();
+-                                    playerInfo.getMyEquip(1);
++                                    short equipId = msg.reader().readShort();
++                                    if (gunSlot < playerInfo.equipID.length) {
++                                        playerInfo.equipID[gunSlot][i] = equipId;
++                                    }
+                                     ++i;
+                                 }
++                                playerInfo.getMyEquip(1);
+                                 playerInfo.isReady = msg.reader().readBoolean();
+                             }
+                             players.addElement(playerInfo);
+@@ -328,12 +332,16 @@
+                         joinPersonInfo.level2 = msg.reader().readUnsignedByte();
+                         joinPersonInfo.getQuanHam();
+                         joinPersonInfo.gun = msg.reader().readByte();
++                        int gunSlot = joinPersonInfo.gun & 255;
+                         int i = 0;
+                         while (i < 5) {
+-                            joinPersonInfo.equipID[joinPersonInfo.gun][i] = msg.reader().readShort();
+-                            joinPersonInfo.getMyEquip(2);
++                            short equipId = msg.reader().readShort();
++                            if (gunSlot < joinPersonInfo.equipID.length) {
++                                joinPersonInfo.equipID[gunSlot][i] = equipId;
++                            }
+                             ++i;
+                         }
++                        joinPersonInfo.getMyEquip(2);
+                         joinPersonInfo.isReady = false;
+                         CCanvas.prepareScr.setAt(seat, joinPersonInfo);
+                         GameService.gI().getClanIcon(joinPersonInfo.clanID);
+@@ -405,14 +413,16 @@
+                             info.level2 = msg.reader().readUnsignedByte();
+                             info.level2Percen = msg.reader().readByte();
+                             info.getQuanHam();
+-                            short[] idEq = new short[5];
++                            int gunSlot = info.gun & 255;
+                             int i = 0;
+                             while (i < 5) {
+-                                idEq[i] = msg.reader().readShort();
+-                                info.equipID[info.gun][i] = idEq[i];
+-                                info.getMyEquip(3);
++                                short equipId = msg.reader().readShort();
++                                if (gunSlot < info.equipID.length) {
++                                    info.equipID[gunSlot][i] = equipId;
++                                }
+                                 ++i;
+                             }
++                            info.getMyEquip(3);
+                             friendList.addElement(info);
+                         }
+                         this.gameLogicHandler.onFriendList(friendList);
+@@ -578,17 +588,16 @@
+                         } else {
+                             CCanvas.menuScr.doTraining(mapID, time, playerX, playerY, maxHP, equipID);
+                         }
+-                        if (CCanvas.prepareScr.itemCur[4] >= 0) {
+-                            ShopItem.getI((int) 12).num = (byte) (ShopItem.getI((int) 12).num - 1);
+-                        }
+-                        if (CCanvas.prepareScr.itemCur[5] >= 0) {
+-                            ShopItem.getI((int) 13).num = (byte) (ShopItem.getI((int) 13).num - 1);
+-                        }
+-                        if (CCanvas.prepareScr.itemCur[6] >= 0) {
+-                            ShopItem.getI((int) 14).num = (byte) (ShopItem.getI((int) 14).num - 1);
+-                        }
+-                        if (CCanvas.prepareScr.itemCur[7] >= 0) {
+-                            ShopItem.getI((int) 15).num = (byte) (ShopItem.getI((int) 15).num - 1);
++                        if (CCanvas.prepareScr != null && CCanvas.prepareScr.itemCur != null) {
++                            int[] consumableIds = new int[]{12, 13, 14, 15};
++                            for (int slot = 4; slot <= 7 && slot < CCanvas.prepareScr.itemCur.length; ++slot) {
++                                if (CCanvas.prepareScr.itemCur[slot] >= 0) {
++                                    Item shopItem = ShopItem.getI(consumableIds[slot - 4]);
++                                    if (shopItem != null) {
++                                        shopItem.num = (byte) (shopItem.num - 1);
++                                    }
++                                }
++                            }
+                         }
+                         CCanvas.endDlg();
+                         CCanvas.menu.showMenu = false;
+@@ -1029,9 +1038,13 @@
+                                 info.xu = msg.reader().readInt();
+                                 info.level2 = msg.reader().readUnsignedByte();
+                                 info.level2Percen = msg.reader().readUnsignedByte();
++                                int gunSlot = info.gun & 255;
+                                 int a = 0;
+                                 while (a < 5) {
+-                                    info.equipID[info.gun][a] = msg.reader().readShort();
++                                    short equipId = msg.reader().readShort();
++                                    if (gunSlot < info.equipID.length) {
++                                        info.equipID[gunSlot][a] = equipId;
++                                    }
+                                     ++a;
+                                 }
+                                 info.getQuanHam();
+@@ -1719,14 +1732,16 @@
+                             info1.STT = msg.reader().readUnsignedByte();
+                             info1.cup = msg.reader().readInt();
+                             info1.getQuanHam();
+-                            short[] idEq = new short[5];
++                            int gunSlot = info1.gun & 255;
+                             int i = 0;
+                             while (i < 5) {
+-                                idEq[i] = msg.reader().readShort();
+-                                info1.equipID[info1.gun][i] = idEq[i];
+-                                info1.getMyEquip(6);
++                                short equipId = msg.reader().readShort();
++                                if (gunSlot < info1.equipID.length) {
++                                    info1.equipID[gunSlot][i] = equipId;
++                                }
+                                 ++i;
+                             }
++                            info1.getMyEquip(6);
+                             info1.clanContribute1 = msg.reader().readUTF();
+                             info1.clanContribute2 = msg.reader().readUTF();
+                             clanMember.addElement(info1);
+@@ -2100,7 +2115,10 @@
+                         int i = 0;
+                         while (i < 5) {
+                             int currDbKey = msg.reader().readInt();
+-                            if (TerrainMidlet.myInfo.myEquip.equips[i] != null) {
++                            if (TerrainMidlet.myInfo != null && TerrainMidlet.myInfo.myEquip != null &&
++                                    TerrainMidlet.myInfo.myEquip.equips != null &&
++                                    i < TerrainMidlet.myInfo.myEquip.equips.length &&
++                                    TerrainMidlet.myInfo.myEquip.equips[i] != null) {
+                                 TerrainMidlet.myInfo.myEquip.equips[i].dbKey = currDbKey;
+                             }
+                             ++i;
+@@ -2162,9 +2180,13 @@
+                             myPlayers.level2Percen = msg.reader().readByte();
+                             myPlayers.getQuanHam();
+                             myPlayers.STT = msg.reader().readUnsignedByte();
++                            int gunSlot = myPlayers.gun & 255;
+                             int i = 0;
+                             while (i < 5) {
+-                                myPlayers.equipID[myPlayers.gun][i] = msg.reader().readShort();
++                                short equipId = msg.reader().readShort();
++                                if (gunSlot < myPlayers.equipID.length) {
++                                    myPlayers.equipID[gunSlot][i] = equipId;
++                                }
+                                 ++i;
+                             }
+                             myPlayers.aa = msg.reader().readUTF();
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/player/CPlayer.java /mnt/data/army2_work/client-libgdx/core/src/player/CPlayer.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/player/CPlayer.java	2026-09-09 10:33:44.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/player/CPlayer.java	2026-09-10 04:32:38.618015877 +0000
+@@ -377,7 +377,7 @@
+ 
+         this.team = this.index % 2 == 0;
+         if (equip != null) {
+-            this.idBullet = equip.equips[0].bullet;
++            this.idBullet = equip.getBulletIdOrDefault();
+         }
+ 
+         if (this.gun == 3) {
+@@ -673,9 +673,6 @@
+     }
+ 
+     public void angleReset() {
+-        if (ModSettings.angle360) {
+-            return;
+-        }
+         if (this.gun <= 9) {
+             if (this.gun != 15) {
+                 if (this.gun != 17) {
+@@ -693,27 +690,28 @@
+     }
+ 
+     public void checkNomarShoot() {
+-        if (ModSettings.angle360) {
+-            this.angle = ModSettings.normalize360(this.angle);
++        // Exact V10 normal-shot limits. The network/gameplay angle must stay inside
++        // the original left/right hemispheres; 360-degree display is HUD-only.
++        if (this.gun < 0 || this.gun >= angleLock.length) {
+             return;
+         }
+-        if (this.look == 0 && this.angle > 180 - angleLock[this.gun]) {
+-            this.angle = 180 - angleLock[this.gun];
++        if (this.look == 0) {
++            int max = 180 - angleLock[this.gun];
++            if (this.angle > max) {
++                this.angle = max;
++            }
++            if (this.angle < 91) {
++                this.angle = 91;
++            }
+         }
+-
+         if (this.look == 2) {
+             if (this.angle < angleLock[this.gun]) {
+                 this.angle = angleLock[this.gun];
+             }
+-
+-            if (this.angle > 270) {
+-                this.angle -= 360;
+-                if (CRes.abs(this.angle) > CRes.abs(angleLock[this.gun])) {
+-                    this.angle = angleLock[this.gun];
+-                }
++            if (this.angle > 89) {
++                this.angle = 89;
+             }
+         }
+-
+     }
+ 
+     public void angleUpdate() {
+@@ -1031,7 +1029,8 @@
+         this.angle = angle;
+         this.checkAngleForSprite();
+         CRes.out("name char shoot| " + this.name + "/" + angle + "/curFame " + this.curFrame);
+-        GameScr.bm.setBullType(critical, whoShoot, _bullType, _x, _y, _numShoot, force2, _xHit, _yHit, this.equip != null ? this.equip.equips[0].bullet : 0);
++        int equippedBullet = this.equip != null ? this.equip.getBulletIdOrDefault() : 0;
++        GameScr.bm.setBullType(critical, whoShoot, _bullType, _x, _y, _numShoot, force2, _xHit, _yHit, equippedBullet);
+         this.setState((byte) 4);
+         if (_bullType == 35) {
+             this.isBum = true;
+@@ -1357,9 +1356,9 @@
+                             if (this.gun != 22) {
+                                 if (this.gun != 23 && this.gun != 24) {
+                                     if (PrepareScr.currLevel != 7 || PrepareScr.currLevel == 7 && this.state != 5 && this.hp != 0) {
+-                                        if (this.equip != null) {
++                                        if (this.equip != null && this.equip.hasBaseGun()) {
+                                             this.equip.paint(g, Look, this.curFrame, this.x, this.y);
+-                                        } else {
++                                        } else if (this.pFrameImg != null) {
+                                             this.pFrameImg.drawFrame(this.curFrame, this.x, this.y, Look, 33, g);
+                                         }
+                                     }
+@@ -1399,7 +1398,12 @@
+ 
+     private void paintCrosshair(mGraphics g) {
+         if (!(this instanceof Boss)) {
+-            g.drawImage(crosshair, this.x + this.dx, this.y - this.dy - 11, mGraphics.HCENTER | mGraphics.VCENTER, false);
++            if (ModSettings.showAimHud) {
++                this.paintV10Trajectory(g);
++            }
++            if (crosshair != null && crosshair.image != null) {
++                g.drawImage(crosshair, this.x + this.dx, this.y - this.dy - 11, mGraphics.HCENTER | mGraphics.VCENTER, false);
++            }
+             if (CCanvas.isDebugging()) {
+                 String param = "a " + this.angle;
+                 Font.smallFont.drawString(g, param, this.x + this.dx + 5, this.y - this.dy - 11 + 5, 2, false);
+@@ -1413,6 +1417,259 @@
+         }
+     }
+ 
++    /**
++     * V10-style aim trajectory preview for the normal 0..9 characters.
++     * This mirrors the reference client's preview physics: full 30-force vector,
++     * per-character wind/gravity scaling, and special spread/bounce previews.
++     * It is visual-only and never changes the angle or FIRE packet.
++     */
++    private void paintV10Trajectory(mGraphics g) {
++        if (this.gun < 0 || this.gun > 9 || this.state == 5) {
++            return;
++        }
++
++        final int fullForce = 30;
++        int startX = this.x + ((20 * CRes.cos(this.angle)) >> 10);
++        int startY = this.y - 12 - ((20 * CRes.sin(this.angle)) >> 10);
++        int vx = (fullForce * CRes.cos(this.angle)) >> 10;
++        int vy = -((fullForce * CRes.sin(this.angle)) >> 10);
++
++        if (this.isUsedItem) {
++            switch (this.itemUsed) {
++                case 1:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 80, 65280);
++                    return;
++                case 6:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 90, 16711680);
++                    return;
++                case 7:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 80, 16711680);
++                    return;
++                case 8:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 80, 16711680);
++                    return;
++                case 9:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 70, 16776960);
++                    return;
++                case 11:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 100, 16711680);
++                    return;
++                case 16:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 50, 16711680);
++                    return;
++                case 17:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 120, 16776960);
++                    return;
++                case 19:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 60, 16776960);
++                    return;
++                case 20:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, -50, 16711680);
++                    return;
++                case 21:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 20 / 100, GameScr.windy * 20 / 100, 100, 16776960);
++                    return;
++                case 22:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy / 2, 0, 0, 20, 16776960);
++                    return;
++                case 25:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 5 / 100, GameScr.windy * 5 / 100, 60, 16776960);
++                    return;
++                case 26:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 100, 16711680);
++                    return;
++                case 28:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 80, 16776960);
++                    return;
++                case 29:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                            GameScr.windx * 6 / 100, GameScr.windy * 6 / 100, 60, 16776960);
++                    return;
++                case 30:
++                    for (int i = 0, a = this.angle - 5; i < 3; i++, a += 5) {
++                        int sx = this.x + ((20 * CRes.cos(a)) >> 10);
++                        int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
++                        int svx = (fullForce * CRes.cos(a)) >> 10;
++                        int svy = -((fullForce * CRes.sin(a)) >> 10);
++                        drawV10Trajectory(g, 0, sx, sy, svx, svy,
++                                GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 70, 16776960);
++                    }
++                    return;
++                case 31:
++                    drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 120, 16776960);
++                    return;
++                default:
++                    break;
++            }
++        }
++
++        switch (this.gun) {
++            case 0:
++                drawV10Trajectory(g, 0, startX, startY, vx, vy,
++                        GameScr.windx * 80 / 100, GameScr.windy * 80 / 100, 100, 255);
++                break;
++            case 1:
++                drawV10Trajectory(g, 1, startX, startY, vx, vy,
++                        GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 50, 255);
++                break;
++            case 2:
++                for (int i = 0, a = this.angle - 5; i < 3; i++, a += 5) {
++                    int sx = this.x + ((20 * CRes.cos(a)) >> 10);
++                    int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
++                    int svx = (fullForce * CRes.cos(a)) >> 10;
++                    int svy = -((fullForce * CRes.sin(a)) >> 10);
++                    drawV10Trajectory(g, 2, sx, sy, svx, svy,
++                            GameScr.windx * 80 / 100, GameScr.windy * 80 / 100, 60, 255);
++                }
++                break;
++            case 3:
++                for (int i = 0, a = this.angle - 6; i < 4; i++, a += 4) {
++                    int sx = this.x + ((20 * CRes.cos(a)) >> 10);
++                    int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
++                    int svx = (fullForce * CRes.cos(a)) >> 10;
++                    int svy = -((fullForce * CRes.sin(a)) >> 10);
++                    drawV10Trajectory(g, 3, sx, sy, svx, svy,
++                            GameScr.windx * 40 / 100, GameScr.windy * 40 / 100, 90, 255);
++                }
++                break;
++            case 4:
++                drawV10Trajectory(g, 4, startX, startY, vx, vy,
++                        GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 80, 255);
++                break;
++            case 5:
++                drawV10Trajectory(g, 5, startX, startY, vx, vy,
++                        GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 90, 255);
++                break;
++            case 6:
++                drawV10Trajectory(g, 6, startX, startY, vx, vy,
++                        GameScr.windx * 20 / 100, GameScr.windy * 20 / 100, 50, 255);
++                break;
++            case 7:
++                drawV10Trajectory(g, 7, startX, startY, vx, vy,
++                        GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 50, 255);
++                break;
++            case 8:
++                drawV10Trajectory(g, 8, startX, startY, vx, vy,
++                        GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 100, 255);
++                break;
++            case 9:
++                drawV10Trajectory(g, 9, startX, startY, vx, vy,
++                        GameScr.windx * 40 / 100, GameScr.windy * 40 / 100, 70, 255);
++                break;
++            default:
++                break;
++        }
++    }
++
++    private void drawV10Trajectory(mGraphics g, int type, int startX, int startY,
++                                   int vx, int vy, int windX, int windY,
++                                   int gravity, int color) {
++        int x = startX;
++        int y = startY;
++        int remX = 0;
++        int remY = 0;
++        int remG = 0;
++        boolean movingLeft = vx <= 0;
++        int phase = -1;
++        int step = 1;
++
++        // V10 normally runs until the projectile leaves its map/screen bounds. Keep
++        // the same physics but retain a hard cap so corrupted map dimensions cannot
++        // freeze the LibGDX render thread.
++        while (step <= 600) {
++            int nx = x + vx;
++            int ny = y + vy;
++            g.setColor(color);
++            g.drawLine(x, y, nx, ny, false);
++
++            remX += windX;
++            remY += windY;
++            remG += gravity;
++            if (Math.abs(remX) >= 100) {
++                vx += remX / 100;
++                remX %= 100;
++            }
++            if (Math.abs(remY) >= 100) {
++                vy += remY / 100;
++                remY %= 100;
++            }
++            if (Math.abs(remG) >= 100) {
++                vy += remG / 100;
++                remG %= 100;
++            }
++
++            if ((vy > 0 && ny > MM.mapHeight + CCanvas.hieght) ||
++                    nx < -100 || nx > MM.mapWidth + 100) {
++                return;
++            }
++
++            // Exact V10 gun-6 preview: at force step 30, spawn the secondary drop
++            // path using half wind and gravity 30, while the main path continues.
++            if (type == 6 && step == 30) {
++                drawV10Trajectory(g, 0, nx, ny + 8, 0, 0,
++                        windX / 2, windY / 2, 30, 16776960);
++            } else if (type == 7) {
++                // V10 boomerang phase: wait until the shot is descending, then bend
++                // once by 1 px/tick and subsequently by 2 px/tick toward the shooter.
++                if (phase == 0) {
++                    vx += movingLeft ? 1 : -1;
++                    phase = 1;
++                } else if (phase > 0) {
++                    vx += movingLeft ? 2 : -2;
++                } else if (vy > 0) {
++                    ++phase; // -1 -> 0
++                }
++            } else if (type == 8 && step == 30) {
++                // V10 gun-8 fans three half-force paths exactly at force step 30.
++                int reboundAngle = this.angle + CRes.fixangle(CRes.angle(this.x - x, this.y - y));
++                if (this.angle < 90) {
++                    reboundAngle = 180 - reboundAngle;
++                }
++                reboundAngle -= 15;
++                for (int i = 0; i < 3; ++i, reboundAngle += 15) {
++                    int sx = x + ((20 * CRes.cos(reboundAngle)) >> 10);
++                    int sy = y - 12 - ((20 * CRes.sin(reboundAngle)) >> 10);
++                    int rvx = (30 * CRes.cos(reboundAngle)) >> 11;
++                    int rvy = -((30 * CRes.sin(reboundAngle)) >> 11);
++                    drawV10Trajectory(g, 0, sx, sy, rvx, rvy,
++                            windX, windY, gravity, 16776960);
++                }
++                return;
++            } else if (type == 9 && phase < 0 && vy >= 0) {
++                // V10 gun-9 redirects once at the vertical turning point and then
++                // flies without wind/gravity; its redirected segment is red.
++                int a = CRes.angle(nx - startX, startY - ny);
++                vx = (30 * CRes.cos(a)) >> 10;
++                vy = (30 * CRes.sin(a)) >> 10;
++                while (vx != 0 && Math.abs(vx) < 15) {
++                    vx += vx;
++                    vy += vy;
++                }
++                windX = 0;
++                windY = 0;
++                gravity = 0;
++                remX = 0;
++                remY = 0;
++                remG = 0;
++                color = 16711680;
++                phase = 0;
++            }
++
++            x = nx;
++            y = ny;
++            ++step;
++        }
++    }
++
+     void painthp(mGraphics g) {
+         if (GameScr.res.equals("")) {
+             if (this.gun != 15) {
+@@ -1840,14 +2097,9 @@
+         if (this.state == 3) {
+             return;
+         }
+-        if (ModSettings.angle360) {
+-            this.angle += this.look == 0 ? -1 : 1;
+-            this.angle = ModSettings.normalize360(this.angle);
+-        } else if (this.look == 0) {
+-            this.angle = Math.max(90, this.angle - 1);
+-        } else {
+-            this.angle = Math.min(90, this.angle + 1);
+-        }
++        // V10: UP moves the barrel upward on screen, which is angle-- when facing
++        // left and angle++ when facing right. Clamp through angleUpdate().
++        this.angle += this.look == 0 ? -1 : 1;
+         this.angleUpdate();
+         this.checkAngleForSprite();
+     }
+@@ -1856,14 +2108,7 @@
+         if (this.state == 3) {
+             return;
+         }
+-        if (ModSettings.angle360) {
+-            this.angle += this.look == 0 ? 1 : -1;
+-            this.angle = ModSettings.normalize360(this.angle);
+-        } else if (this.look == 0) {
+-            this.angle = Math.min(180 - angleLock[this.gun], this.angle + 1);
+-        } else {
+-            this.angle = Math.max(angleLock[this.gun], this.angle - 1);
+-        }
++        this.angle += this.look == 0 ? 1 : -1;
+         this.angleUpdate();
+         this.checkAngleForSprite();
+     }
+@@ -2222,18 +2467,6 @@
+                                 int dy = this.y - yScreen - Camera.y;
+                                 int a = CRes.angle(-dx, dy);
+                                 CRes.out("a Trc = " + a);
+-                                if (!ModSettings.angle360) {
+-                                    if (this.look == 2 && a < angleLock[this.gun]) {
+-                                        a = angleLock[this.gun];
+-                                    }
+-
+-                                    if (this.look == 0 && a > 180 - angleLock[this.gun]) {
+-                                        a = 180 - angleLock[this.gun];
+-                                    }
+-                                } else {
+-                                    a = ModSettings.normalize360(a);
+-                                }
+-
+                                 this.angle = a;
+                                 this.angleUpdate();
+                                 this.checkAngleForSprite();
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/core/src/player/PM.java /mnt/data/army2_work/client-libgdx/core/src/player/PM.java
+--- /mnt/data/army2_baseline/client-libgdx/core/src/player/PM.java	2024-11-07 20:41:02.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/core/src/player/PM.java	2026-09-10 04:28:19.991264741 +0000
+@@ -54,40 +54,60 @@
+     public void initPlayer(short[] pX, short[] pY, short[] maxHP) {
+         this.playerCount = 0;
+         this.allCount = 0;
+-        int num = 8;
+-        if (PrepareScr.currLevel == 7) {
+-            num = NUMB_PLAYER;
++        if (p == null || pX == null || pY == null || maxHP == null || CCanvas.prepareScr == null ||
++                CCanvas.prepareScr.playerInfos == null) {
++            CRes.err("initPlayer: missing battle/player data");
++            return;
+         }
+ 
++        int requested = PrepareScr.currLevel == 7 ? NUMB_PLAYER : 8;
++        int num = Math.min(requested, Math.min(p.length, Math.min(pX.length, Math.min(pY.length, maxHP.length))));
++
+         int i;
+         for (i = 0; i < num; ++i) {
+             p[i] = null;
+             if (pX[i] != -1) {
++                if (i >= CCanvas.prepareScr.playerInfos.size()) {
++                    CRes.err("initPlayer: missing PlayerInfo at seat " + i);
++                    continue;
++                }
+                 PlayerInfo pi = (PlayerInfo) CCanvas.prepareScr.playerInfos.elementAt(i);
+-                boolean isCom = TerrainMidlet.myInfo.IDDB != pi.IDDB;
+-                if (!pi.isBoss) {
+-                    p[i] = new CPlayer(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, pi.myEquip, maxHP[i]);
+-                    p[i].clanIcon = pi.clanIcon;
+-                    p[i].equip = pi.myEquip;
+-                } else {
+-                    p[i] = new Boss(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, maxHP[i]);
++                if (pi == null) {
++                    continue;
+                 }
+-
+-                p[i].name = pi.name;
+-                p[i].nQuanHam = pi.nQuanHam2;
+-                p[i].maxhp = maxHP[i];
+-                if (!isCom) {
+-                    p[i].item = CCanvas.prepareScr.copyItemCurrent();
+-                    GameScr.myIndex = (byte) i;
++                if (pi.myEquip == null) {
++                    pi.getMyEquip(9);
++                }
++                boolean isCom = TerrainMidlet.myInfo == null || TerrainMidlet.myInfo.IDDB != pi.IDDB;
++                try {
++                    if (!pi.isBoss) {
++                        p[i] = new CPlayer(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, pi.myEquip, maxHP[i]);
++                        p[i].clanIcon = pi.clanIcon;
++                        p[i].equip = pi.myEquip;
++                    } else {
++                        p[i] = new Boss(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, maxHP[i]);
++                    }
++
++                    p[i].name = pi.name;
++                    p[i].nQuanHam = pi.nQuanHam2;
++                    p[i].maxhp = maxHP[i];
++                    if (!isCom) {
++                        p[i].item = CCanvas.prepareScr.copyItemCurrent();
++                        GameScr.myIndex = (byte) i;
++                    }
++                } catch (RuntimeException ex) {
++                    CRes.err("initPlayer seat " + i + " failed: " + ex);
++                    p[i] = null;
+                 }
+             }
+ 
+-            ++this.playerCount;
+         }
+ 
+-        this.allCount = this.playerCount;
++        this.playerCount = num;
++        this.allCount = num;
+ 
+-        for (i = 0; i < num; npNumSend[i] = i++) {
++        int sendCount = Math.min(num, Math.min(npNumSend.length, Math.min(npXsend.length, npYsend.length)));
++        for (i = 0; i < sendCount; npNumSend[i] = i++) {
+             npXsend[i] = -1;
+             npYsend[i] = -1;
+         }
+@@ -95,8 +115,11 @@
+     }
+ 
+     public String getPlayerNameFromID(int id) {
++        if (p == null) {
++            return "";
++        }
+         for (int i = 0; i < p.length; ++i) {
+-            if (p[i].IDDB == id) {
++            if (p[i] != null && p[i].IDDB == id) {
+                 return p[i].name;
+             }
+         }
+diff -ruN '--exclude=.gradle' '--exclude=build' '--exclude=V10_LIBGDX_FIX.patch' /mnt/data/army2_baseline/client-libgdx/tools/verify_source.py /mnt/data/army2_work/client-libgdx/tools/verify_source.py
+--- /mnt/data/army2_baseline/client-libgdx/tools/verify_source.py	2026-09-09 10:56:10.000000000 +0000
++++ /mnt/data/army2_work/client-libgdx/tools/verify_source.py	2026-09-10 04:28:49.608632415 +0000
+@@ -45,7 +45,7 @@
+ 
+ # V10-style desktop QoL layer.
+ mod = text('core/src/mod/ModSettings.java')
+-check('360 aim defaults ON', 'angle360", true' in mod)
++check('360 HUD mode defaults OFF so V10 aim is authoritative', 'angle360", false' in mod)
+ check('aim HUD defaults ON', 'showAimHud", true' in mod)
+ main = text('core/src/com/teamobi/mobiarmy2/MainGame.java')
+ for f, action in [('F6','toggleAngle360'),('F7','toggleAimHud'),('F8','toggleAutoClick'),('F9','toggleOverlay')]:
+@@ -83,13 +83,21 @@
+ check('room packet parse failures close wait dialog', 'Lỗi dữ liệu phòng (cmd ' in text('core/src/network/MessageHandler.java'))
+ 
+ cp = text('core/src/player/CPlayer.java')
+-check('angleReset bypasses lock in 360 mode', 'public void angleReset()' in cp and 'if (ModSettings.angle360)' in cp)
+-check('normal-shoot clamp bypasses lock in 360 mode', 'this.angle = ModSettings.normalize360(this.angle);' in cp)
+-check('pointer aiming skips angleLock in 360 mode', 'if (!ModSettings.angle360)' in cp and 'a = ModSettings.normalize360(a);' in cp)
++check('V10 normal aim clamps left side to >=91 degrees', 'if (this.angle < 91)' in cp and 'this.angle = 91;' in cp)
++check('V10 normal aim clamps right side to <=89 degrees', 'if (this.angle > 89)' in cp and 'this.angle = 89;' in cp)
++check('360 display no longer normalizes gameplay/network angle', 'this.angle = ModSettings.normalize360(this.angle);' not in cp and 'a = ModSettings.normalize360(a);' not in cp)
+ 
+ gs = text('core/src/screen/GameScr.java')
+ check('HUD shows normalized 360 angle', 'ModSettings.normalize360(angle)' in gs and '360°' in gs)
+ check('mod overlay exists', '[F6/F7/F8/F9]' in gs)
++check('V10 trajectory preview is wired to crosshair', 'paintV10Trajectory(g);' in cp and 'drawV10Trajectory(' in cp)
++check('map values parser keeps outer map index intact', 'for (int valueIndex = 0; valueIndex < 5; ++valueIndex)' in ccanvas)
++handler = text('core/src/network/MessageHandler.java')
++check('board equipment packet resolves only after all 5 IDs are read', handler.find('playerInfo.getMyEquip(1);') > handler.find('while (i < 5)', handler.find('case 8:')))
++peq = text('core/src/Equipment/PlayerEquip.java')
++check('equipment rendering tolerates missing base gun/resource', 'hasBaseGun()' in peq and 'bad cosmetic/equipment frame' in peq.lower())
++pm = text('core/src/player/PM.java')
++check('battle player init validates packet array bounds', 'Math.min(requested' in pm and 'missing PlayerInfo at seat' in pm)
+ 
+ # Desktop stability fixes found during audit.
+ ses = text('core/src/network/Session_ME.java')

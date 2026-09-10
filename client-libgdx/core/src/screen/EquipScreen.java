@@ -127,13 +127,12 @@ public class EquipScreen extends TabScreen {
                }
             });
             Vector<Command> menu = new Vector();
-            final Equip selectedEquip = EquipScreen.this.getEquipSelect();
-            if (selectedEquip != null) {
-               if (selectedEquip.date == 0) {
+            if (EquipScreen.this.myEquips.size() != 0) {
+               if (EquipScreen.this.getEquipSelect().date == 0) {
                   Command giahan = new Command("Gia hạn", new IAction() {
                      public void perform() {
                         CCanvas.startOKDlg(Language.pleaseWait());
-                        GameService.gI().get_more_day((byte)0, selectedEquip.dbKey);
+                        GameService.gI().get_more_day((byte)0, EquipScreen.this.getEquipSelect().dbKey);
                      }
                   });
                   menu.addElement(giahan);
@@ -193,16 +192,7 @@ public class EquipScreen extends TabScreen {
       this.isClose = false;
       this.select = 0;
       PlayerInfo m = TerrainMidlet.myInfo;
-      if (m == null || m.myEquip == null) {
-         CRes.out("[EQUIP] Player/equipment state is not ready yet");
-         this.myEquips.removeAllElements();
-         return;
-      }
-      int gunIndex = m.gun & 255;
-      if (m.equipVipID != null && gunIndex < m.equipVipID.length
-              && m.equipVipID[gunIndex] != null && m.equipVipID[gunIndex].length > 1) {
-         PlayerInfo.vipID = m.equipVipID[gunIndex][1];
-      }
+      PlayerInfo.vipID = m.equipVipID[m.gun][1];
       this.getLastEquip();
       this.getDetail();
       TerrainMidlet.myInfo.getMyEquip(9);
@@ -242,9 +232,7 @@ public class EquipScreen extends TabScreen {
 
    public Equip getEquip(int dbKey) {
       for(int i = 0; i < this.myEquips.size(); ++i) {
-         Object raw = this.myEquips.elementAt(i);
-         if (!(raw instanceof Equip)) continue;
-         Equip e = (Equip)raw;
+         Equip e = (Equip)this.myEquips.elementAt(i);
          if (e.dbKey == dbKey) {
             return e;
          }
@@ -295,35 +283,25 @@ public class EquipScreen extends TabScreen {
 
    public void getMyEquip() {
       this.myEquips.removeAllElements();
-      PlayerInfo info = TerrainMidlet.myInfo;
-      if (inventory == null || info == null || info.myEquip == null || info.myEquip.equips == null) {
-         return;
-      }
 
       for(int i = 0; i < inventory.size(); ++i) {
-         Object raw = inventory.elementAt(i);
-         if (!(raw instanceof Equip)) {
-            continue;
-         }
-         Equip e = (Equip)raw;
-         if (!e.isMaterial && e.glass == info.gun) {
+         Equip e = (Equip)inventory.elementAt(i);
+         if (!e.isMaterial && e.glass == TerrainMidlet.myInfo.gun) {
             this.myEquips.addElement(e);
          }
       }
 
       byte materialId = -1;
+
       for(int i = 0; i < inventory.size(); ++i) {
-         Object raw = inventory.elementAt(i);
-         if (!(raw instanceof Equip)) {
-            continue;
-         }
-         Equip e = (Equip)raw;
+         Equip e = (Equip)inventory.elementAt(i);
          if (e.isMaterial && materialId != (byte)e.id) {
             materialId = (byte)e.id;
             if (e.materialIcon == null) {
                if (MaterialIconMn.isExistIcon(e.icon)) {
                   e.materialIcon = MaterialIconMn.getImageFromID(e.icon);
                }
+
                GameService.gI().getMaterialIcon((byte)0, materialId, -1);
             }
          }
@@ -334,15 +312,16 @@ public class EquipScreen extends TabScreen {
          ++this.hIndex;
       }
 
+      PlayerInfo info = TerrainMidlet.myInfo;
+
       for(int i = 0; i < this.myEquips.size(); ++i) {
          Equip tam = (Equip)this.myEquips.elementAt(i);
-         int type = tam.type & 255;
-         if (type < info.myEquip.equips.length && info.myEquip.equips[type] != null
-                 && info.myEquip.equips[type].dbKey == tam.dbKey) {
-            info.myEquip.equips[type].removeAbility();
-            info.myEquip.equips[type].addAbilityFromEquip(tam);
+         if (info.myEquip.equips[tam.type] != null && info.myEquip.equips[tam.type].dbKey == tam.dbKey) {
+            info.myEquip.equips[tam.type].removeAbility();
+            info.myEquip.equips[tam.type].addAbilityFromEquip(tam);
          }
       }
+
    }
 
    public void addEquip(Equip e, boolean isNum) {
@@ -440,20 +419,23 @@ public class EquipScreen extends TabScreen {
 
    public void doFire() {
       try {
-         if (this.myEquips == null || this.myEquips.size() == 0) {
+         if (this.myEquips.size() == 0) {
             return;
          }
 
-         final Equip e = this.getEquipSelect();
-         if (e == null || e.isMaterial) {
+         if (this.getEquipSelect() == null) {
             return;
          }
 
-         if (e.date == 0) {
+         if (this.getEquipSelect().isMaterial) {
+            return;
+         }
+
+         if (this.getEquipSelect().date == 0) {
             CCanvas.startYesNoDlg(Language.noticGiahanTrangBi(), new IAction() {
                public void perform() {
                   CCanvas.startOKDlg(Language.pleaseWait());
-                  GameService.gI().get_more_day((byte)0, e.dbKey);
+                  GameService.gI().get_more_day((byte)0, EquipScreen.this.getEquipSelect().dbKey);
                }
             }, new IAction() {
                public void perform() {
@@ -464,22 +446,21 @@ public class EquipScreen extends TabScreen {
          }
 
          PlayerInfo m = TerrainMidlet.myInfo;
-         if (m == null || m.myEquip == null || m.myEquip.equips == null) {
-            CRes.out("[EQUIP] Equip click ignored: player equipment state is not ready");
-            return;
-         }
-         int gun = m.gun & 255;
-         int type = e.type & 255;
-
+         Equip e = this.getEquipSelect();
          if (e.vip == 1) {
             if (e.id != PlayerInfo.vipID) {
                GameService.gI().vip_equip((byte)1, e.dbKey);
             } else {
-               boolean isVip = TerrainMidlet.isVip != null && gun < TerrainMidlet.isVip.length
-                       && TerrainMidlet.isVip[gun];
-               e.isVip = isVip;
-               GameService.gI().vip_equip((byte)(isVip ? 0 : 1), e.dbKey);
+               boolean isVip = TerrainMidlet.isVip[m.gun];
+               if (isVip) {
+                  e.isVip = true;
+                  GameService.gI().vip_equip((byte)0, e.dbKey);
+               } else {
+                  e.isVip = false;
+                  GameService.gI().vip_equip((byte)1, e.dbKey);
+               }
             }
+
             return;
          }
 
@@ -488,33 +469,26 @@ public class EquipScreen extends TabScreen {
             return;
          }
 
-         for(int i = 0; i < m.myEquip.equips.length; ++i) {
+         int i;
+         for(i = 0; i < 5; ++i) {
             if (m.myEquip.equips[i] != null && e.dbKey == m.myEquip.equips[i].dbKey) {
                return;
             }
          }
 
-         if (this.typeE != null && this.dbKeyChange != null) {
-            for(int i = 0; i < this.typeE.length && i < this.dbKeyChange.length; ++i) {
-               if ((e.type & 255) == (this.typeE[i] & 255)) {
-                  this.dbKeyChange[i] = e.dbKey;
-               }
+         for(i = 0; i < this.typeE.length; ++i) {
+            if (e.type == this.typeE[i]) {
+               this.dbKeyChange[i] = e.dbKey;
             }
          }
 
-         if (m.equipID == null || gun >= m.equipID.length || m.equipID[gun] == null
-                 || type >= m.equipID[gun].length) {
-            CRes.out("[EQUIP] Equip click ignored: missing equipID gun=" + gun + " type=" + type);
-            return;
-         }
-         short id = m.equipID[gun][type];
+         short id = m.equipID[m.gun][e.type];
          Equip currE = PlayerEquip.createEquip(m.gun, e.type, id);
          m.addChangeEquip(e, currE);
          this.changeEquip();
          this.setCurrEquip();
          this.getBaseAttribute();
-      } catch (Exception ex) {
-         CRes.out("[EQUIP] Equip click failed safely: " + ex);
+      } catch (Exception var5) {
       }
 
    }
@@ -531,8 +505,8 @@ public class EquipScreen extends TabScreen {
             this.select = this.myEquips.size() - 1;
          }
 
-         Object raw = this.myEquips.elementAt(this.select);
-         return raw instanceof Equip ? (Equip)raw : null;
+         Equip eS = (Equip)this.myEquips.elementAt(this.select);
+         return eS;
       } else {
          return null;
       }
@@ -541,11 +515,9 @@ public class EquipScreen extends TabScreen {
    public void resetEquip() {
       try {
          PlayerInfo m = TerrainMidlet.myInfo;
-         if (m == null || m.myEquip == null || m.myEquip.equips == null) return;
 
-         for(int i = 0; i < this.lastEquip.length && i < m.myEquip.equips.length; ++i) {
+         for(int i = 0; i < this.lastEquip.length; ++i) {
             if (this.lastEquip[i] != null) {
-               if (m.myEquip.equips[i] == null) m.myEquip.equips[i] = new Equip();
                m.myEquip.equips[i].changeToEquip(this.lastEquip[i]);
             }
          }
@@ -558,64 +530,44 @@ public class EquipScreen extends TabScreen {
 
    public void getLastEquip() {
       PlayerInfo m = TerrainMidlet.myInfo;
-      if (m == null || m.myEquip == null || m.myEquip.equips == null) {
-         for (int i = 0; i < 5; ++i) {
-            this.lastDb[i] = -1;
-            this.dbKeyChange[i] = -1;
-            this.lastEquip[i] = null;
-         }
-         return;
-      }
-      int gun = m.gun & 255;
+
       for(int i = 0; i < 5; ++i) {
-         Equip current = i < m.myEquip.equips.length ? m.myEquip.equips[i] : null;
-         if (current != null) {
-            this.lastDb[i] = (short)current.dbKey;
-            if (m.equipID != null && gun < m.equipID.length && m.equipID[gun] != null && i < m.equipID[gun].length) {
-               m.equipID[gun][i] = current.id;
-            }
+         if (m.myEquip.equips[i] != null) {
+            this.lastDb[i] = (short)m.myEquip.equips[i].dbKey;
+            m.equipID[m.gun][i] = m.myEquip.equips[i].id;
             this.lastEquip[i] = new Equip();
-            this.lastEquip[i].changeToEquip(current);
+            this.lastEquip[i].changeToEquip(m.myEquip.equips[i]);
          } else {
             this.lastDb[i] = -1;
-            this.lastEquip[i] = null;
          }
+
          this.dbKeyChange[i] = this.lastDb[i];
       }
+
    }
 
    public void changeEquip() {
       PlayerInfo m = TerrainMidlet.myInfo;
       Equip sl = this.getEquipSelect();
-      if (m == null || m.myEquip == null || m.myEquip.equips == null || sl == null) {
-         return;
-      }
-      int type = sl.type & 255;
-      if (type >= m.myEquip.equips.length) {
-         CRes.out("[EQUIP] Invalid equipment type " + type + " for id " + sl.id);
-         return;
-      }
-      if (m.myEquip.equips[type] == null) {
-         m.myEquip.equips[type] = PlayerEquip.getEquip(sl.glass, sl.type, sl.id);
-         if (m.myEquip.equips[type] == null) {
-            CRes.out("[EQUIP] Missing template glass=" + sl.glass + " type=" + sl.type + " id=" + sl.id);
-            return;
+      if (sl != null) {
+         if (m.myEquip.equips[sl.type] == null) {
+            m.myEquip.equips[sl.type] = PlayerEquip.getEquip(sl.glass, sl.type, sl.id);
          }
+
+         m.myEquip.equips[sl.type].changeToEquip(sl);
       }
 
-      Equip target = m.myEquip.equips[type];
-      target.changeToEquip(sl);
-      target.icon = sl.icon;
-      target.x = sl.x;
-      target.y = sl.y;
-      target.dx = sl.dx;
-      target.dy = sl.dy;
-      target.w = sl.w;
-      target.h = sl.h;
-      target.bullet = sl.bullet;
-      target.frame = sl.frame;
-      target.addAbilityFromEquip(sl);
-      target.dbKey = sl.dbKey;
+      m.myEquip.equips[sl.type].icon = sl.icon;
+      m.myEquip.equips[sl.type].x = sl.x;
+      m.myEquip.equips[sl.type].y = sl.y;
+      m.myEquip.equips[sl.type].dx = sl.dx;
+      m.myEquip.equips[sl.type].dy = sl.dy;
+      m.myEquip.equips[sl.type].w = sl.w;
+      m.myEquip.equips[sl.type].h = sl.h;
+      m.myEquip.equips[sl.type].bullet = sl.bullet;
+      m.myEquip.equips[sl.type].frame = sl.frame;
+      m.myEquip.equips[sl.type].addAbilityFromEquip(sl);
+      m.myEquip.equips[sl.type].dbKey = sl.dbKey;
    }
 
    public void doInventory() {
@@ -659,167 +611,191 @@ public class EquipScreen extends TabScreen {
       g.fillRoundRect(X - 5, this.yPaint + 96, 72, 67, 6, 6, false);
       g.setClip(X - 1, Y - 1, 62, 60);
       g.translate(0, -cmyI);
-      int row = 0;
-      int col = 0;
-      PlayerInfo m = TerrainMidlet.myInfo;
+      int j = 0;
+      int i = 0;
+      Equip e = null;
 
-      for(int n = 0; this.myEquips != null && n < this.myEquips.size(); ++n) {
-         Object raw = this.myEquips.elementAt(n);
-         if (!(raw instanceof Equip)) {
-            continue;
-         }
-         Equip e = (Equip)raw;
-         int x1 = X + col * this.wTab + this.wP;
-         int y1 = Y + row * this.wTab + this.wP;
-         int type = e.type & 255;
-
-         if (m != null && m.myEquip != null && m.myEquip.equips != null
-                 && type < m.myEquip.equips.length && m.myEquip.equips[type] != null
-                 && e.dbKey == m.myEquip.equips[type].dbKey) {
-            g.setColor(4819660);
-            g.fillRect(x1, y1, 16, 16, true);
-         }
-
-         if (e.vip == 1) {
-            g.setColor(5361158);
-            g.fillRect(x1, y1, 16, 16, true);
-            int gun = m == null ? -1 : m.gun & 255;
-            if (m != null && TerrainMidlet.isVip != null && gun >= 0 && gun < TerrainMidlet.isVip.length
-                    && TerrainMidlet.isVip[gun] && e.id == PlayerInfo.vipID) {
-               g.setColor(5963263);
+      for(int n = 0; n < this.myEquips.size(); ++n) {
+         e = (Equip)this.myEquips.elementAt(n);
+         int x1 = X + i * this.wTab + this.wP;
+         int y1 = Y + j * this.wTab + this.wP;
+         int xIcon = x1;
+         int yIcon = y1;
+         if (e != null) {
+            PlayerInfo m = TerrainMidlet.myInfo;
+            if (m.myEquip.equips[e.type] != null && e.dbKey == m.myEquip.equips[e.type].dbKey) {
+               g.setColor(4819660);
                g.fillRect(x1, y1, 16, 16, true);
             }
-         }
 
-         if (e.date == 0) {
-            g.setColor(9014930);
-            g.fillRect(x1, y1, 16, 16, true);
-         }
-
-         if (this.select == n) {
-            g.setColor(16767817);
-            g.fillRect(x1 - 1, y1 - 1, 18, 18, true);
-            if (!CCanvas.isTouch) {
-               cmtoYI = y1 - (Y + 20);
+            if (e.vip == 1) {
+               g.setColor(5361158);
+               g.fillRect(x1, y1, 16, 16, true);
+               if (TerrainMidlet.isVip[m.gun] && e.id == PlayerInfo.vipID) {
+                  g.setColor(5963263);
+                  g.fillRect(x1, y1, 16, 16, true);
+               }
             }
-            for(int a = 0; a < this.typeE.length; ++a) {
-               if (e.type == this.typeE[a]) {
-                  this.ind = a;
+
+            if (e.date == 0) {
+               g.setColor(9014930);
+               g.fillRect(x1, y1, 16, 16, true);
+            }
+
+            if (this.select == n) {
+               g.setColor(16767817);
+               g.fillRect(x1 - 1, y1 - 1, 18, 18, true);
+               if (!CCanvas.isTouch) {
+                  cmtoYI = y1 - (Y + 20);
+               }
+
+               Equip eS = (Equip)this.myEquips.elementAt(this.select);
+               if (e != null) {
+                  for(int a = 0; a < this.typeE.length; ++a) {
+                     if (eS.type == this.typeE[a]) {
+                        this.ind = a;
+                     }
+                  }
+               }
+            }
+
+            if (e.isSelect) {
+               g.setColor(16777215);
+               g.fillRect(x1, y1, 16, 16, true);
+            }
+
+            e.drawIcon(g, x1, y1, true);
+            if (!e.isMaterial) {
+               for(int a = 0; a < 3 - e.slot; ++a) {
+                  if (i != this.select) {
+                     g.setColor(16377901);
+                     g.fillRect(xIcon + a * 4, yIcon, 2, 2, true);
+                  } else {
+                     g.setColor(0);
+                     g.fillRect(xIcon + a * 4, yIcon, 2, 2, true);
+                  }
                }
             }
          }
 
-         if (e.isSelect) {
-            g.setColor(16777215);
-            g.fillRect(x1, y1, 16, 16, true);
-         }
-         e.drawIcon(g, x1, y1, true);
-         if (!e.isMaterial) {
-            int freeSlots = Math.max(0, Math.min(3, 3 - e.slot));
-            for(int a = 0; a < freeSlots; ++a) {
-               g.setColor(this.select == n ? 0 : 16377901);
-               g.fillRect(x1 + a * 4, y1, 2, 2, true);
-            }
-         }
-
-         ++col;
-         if (col == this.wIndex) {
-            ++row;
-            col = 0;
+         ++i;
+         if (i == this.wIndex) {
+            ++j;
+            i = 0;
          }
       }
+
       g.translate(0, -g.getTranslateY());
    }
 
    public void getBaseAttribute() {
       PlayerInfo info = TerrainMidlet.myInfo;
-      for (int i = 0; i < this.atts.length; ++i) this.atts[i] = 0;
-      if (info == null || info.ability == null || info.myEquip == null || info.myEquip.equips == null) {
-         return;
-      }
       int[] ability = new int[5];
       int[] percen = new int[5];
       Equip vip = null;
-      int gun = info.gun & 255;
-      if (TerrainMidlet.isVip != null && gun < TerrainMidlet.isVip.length && TerrainMidlet.isVip[gun]) {
-         for(int j = 0; this.myEquips != null && j < this.myEquips.size(); ++j) {
-            Object raw = this.myEquips.elementAt(j);
-            if (raw instanceof Equip && ((Equip)raw).id == PlayerInfo.vipID) {
-               vip = (Equip)raw;
+      int j;
+      Equip eq;
+      if (TerrainMidlet.isVip[TerrainMidlet.myInfo.gun]) {
+         CRes.out("DANG VIP");
+
+         for(j = 0; j < this.myEquips.size(); ++j) {
+            eq = (Equip)this.myEquips.elementAt(j);
+            if (eq.id == PlayerInfo.vipID) {
+               vip = eq;
                break;
             }
          }
       }
 
-      for(int j = 0; j < Math.min(5, info.myEquip.equips.length); ++j) {
-         Equip eq = info.myEquip.equips[j];
-         if (eq == null) continue;
-         for(int k = 0; k < 5; ++k) {
-            if (eq.inv_ability != null && k < eq.inv_ability.length) ability[k] += eq.inv_ability[k];
-            if (eq.inv_percen != null && k < eq.inv_percen.length) percen[k] += eq.inv_percen[k];
-         }
-      }
-      if (vip != null) {
-         for(int j = 0; j < 5; ++j) {
-            if (vip.inv_ability != null && j < vip.inv_ability.length) ability[j] += vip.inv_ability[j];
-            if (vip.inv_percen != null && j < vip.inv_percen.length) percen[j] += vip.inv_percen[j];
+      for(j = 0; j < 5; ++j) {
+         eq = info.myEquip.equips[j];
+         if (eq != null) {
+            for(j = 0; j < 5; ++j) {
+               ability[j] += eq.inv_ability[j];
+               percen[j] += eq.inv_percen[j];
+            }
          }
       }
 
-      int base0 = info.ability.length > 0 ? info.ability[0] : 0;
-      this.atts[0] = 1000 + base0 * 10 + ability[0] * 10;
-      this.atts[0] += (1000 + base0) * percen[0] / 100;
-      Equipment.EquipGlass currentGlass = PlayerEquip.getEquipGlass(info.gun);
-      int maxDamage = currentGlass == null ? 0 : currentGlass.maxDamage;
-      int damPoint = ability[1] + (info.ability.length > 1 ? info.ability[1] : 0);
-      int defPoint = ability[2] + (info.ability.length > 2 ? info.ability[2] : 0);
-      int luckPoint = ability[3] + (info.ability.length > 3 ? info.ability[3] : 0);
-      int teamPoint = ability[4] + (info.ability.length > 4 ? info.ability[4] : 0);
+      if (vip != null) {
+         for(j = 0; j < 5; ++j) {
+            ability[j] += vip.inv_ability[j];
+            percen[j] += vip.inv_percen[j];
+         }
+      }
+
+      this.atts[0] = 1000 + info.ability[0] * 10 + ability[0] * 10;
+      int[] var10000 = this.atts;
+      var10000[0] += (1000 + info.ability[0]) * percen[0] / 100;
+      int maxDamage = PlayerEquip.getEquipGlass(info.gun).maxDamage;
+      int damPoint = ability[1] + info.ability[1];
+      j = ability[2] + info.ability[2];
+      int luckPoint = ability[3] + info.ability[3];
+      int teamPoint = ability[4] + info.ability[4];
       this.atts[1] = maxDamage * (damPoint / 3 + 100 + percen[1]) / 100;
-      this.atts[2] = defPoint * 10;
-      this.atts[2] += this.atts[2] * percen[2] / 100;
+      this.atts[2] = j * 10;
+      var10000 = this.atts;
+      var10000[2] += this.atts[2] * percen[2] / 100;
       this.atts[3] = luckPoint * 10;
-      this.atts[3] += this.atts[3] * percen[3] / 100;
+      var10000 = this.atts;
+      var10000[3] += this.atts[3] * percen[3] / 100;
       this.atts[4] = teamPoint * 10;
-      this.atts[4] += this.atts[4] * percen[4] / 100;
+      var10000 = this.atts;
+      var10000[4] += this.atts[4] * percen[4] / 100;
    }
 
    public void paintAbility(mGraphics g) {
-      PlayerInfo info = TerrainMidlet.myInfo;
-      if (info == null) {
-         return;
-      }
-      Font.normalFont.drawString(g, "Level: " + info.level2, this.W / 2 + 24, this.yPaint + 22, 3);
+      Font.normalFont.drawString(g, "Level: " + TerrainMidlet.myInfo.level2, this.W / 2 + 24, this.yPaint + 22, 3);
       Font.normalFont.drawString(g, "%", this.W / 2 + 75, this.yPaint + 22, 3);
 
       for(int i = 0; i < 5; ++i) {
-         if (LevelScreen.ability != null && LevelScreen.ability.image != null
-                 && LevelScreen.ability.image.getHeight() >= (i + 1) * 16) {
-            g.drawRegion(LevelScreen.ability, 0, i * 16, 16, 16, 0,
-                    this.W / 2 - 1, this.yPaint + 46 + i * 18, 3, false);
-         }
+         g.drawRegion(LevelScreen.ability, 0, i * 16, 16, 16, 0, this.W / 2 - 1, this.yPaint + 46 + i * 18, 3, false);
          g.setColor(2378093);
          g.fillRect(CCanvas.width / 2 + 9, this.yPaint + 38 + i * 18, 35, 16, false);
          g.fillRect(CCanvas.width / 2 + 46, this.yPaint + 38 + i * 18, 18, 16, false);
          g.fillRect(CCanvas.width / 2 + 66, this.yPaint + 38 + i * 18, 19, 16, false);
-         int attDelta = info.attAddPoint1 != null && i < info.attAddPoint1.length ? info.attAddPoint1[i] : 0;
-         int perDelta = info.attAddPoint2 != null && i < info.attAddPoint2.length ? info.attAddPoint2[i] : 0;
-         byte dir1 = info.UpOrDown1 != null && i < info.UpOrDown1.length ? info.UpOrDown1[i] : 0;
-         byte dir2 = info.UpOrDown2 != null && i < info.UpOrDown2.length ? info.UpOrDown2[i] : 0;
-         Font.normalYFont.drawString(g, String.valueOf(this.atts[i]), this.W / 2 + 26, this.yPaint + 39 + i * 18, 3);
-         drawDelta(g, Math.abs(attDelta), dir1, this.W / 2 + 56, this.yPaint + 39 + i * 18);
-         drawDelta(g, Math.abs(perDelta), dir2, this.W / 2 + 75, this.yPaint + 39 + i * 18);
-      }
-   }
+         PlayerInfo info = TerrainMidlet.myInfo;
+         String attAddP = String.valueOf(Math.abs(info.attAddPoint1[i]));
+         String perAddP = String.valueOf(Math.abs(info.attAddPoint2[i]));
+         int attribute = this.atts[i];
+         Font.normalYFont.drawString(g, String.valueOf(attribute), this.W / 2 + 26, this.yPaint + 39 + i * 18, 3);
+         byte var10000 = info.UpOrDown1[i];
+         info.getClass();
+         if (var10000 == 0) {
+            Font.normalYFont.drawString(g, attAddP, this.W / 2 + 56, this.yPaint + 39 + i * 18, 3);
+         }
 
-   private static void drawDelta(mGraphics g, int value, byte direction, int x, int y) {
-      if (direction == 2) {
-         Font.normalRFont.drawString(g, String.valueOf(value), x, y, 3);
-      } else if (direction == 1) {
-         Font.normalGFont.drawString(g, String.valueOf(value), x, y, 3);
-      } else {
-         Font.normalYFont.drawString(g, String.valueOf(value), x, y, 3);
+         var10000 = info.UpOrDown1[i];
+         info.getClass();
+         if (var10000 == 2) {
+            Font.normalRFont.drawString(g, attAddP, this.W / 2 + 56, this.yPaint + 39 + i * 18, 3);
+         }
+
+         var10000 = info.UpOrDown1[i];
+         info.getClass();
+         if (var10000 == 1) {
+            Font.normalGFont.drawString(g, attAddP, this.W / 2 + 56, this.yPaint + 39 + i * 18, 3);
+         }
+
+         var10000 = info.UpOrDown2[i];
+         info.getClass();
+         if (var10000 == 0) {
+            Font.normalYFont.drawString(g, perAddP, this.W / 2 + 75, this.yPaint + 39 + i * 18, 3);
+         }
+
+         var10000 = info.UpOrDown2[i];
+         info.getClass();
+         if (var10000 == 2) {
+            Font.normalRFont.drawString(g, perAddP, this.W / 2 + 75, this.yPaint + 39 + i * 18, 3);
+         }
+
+         var10000 = info.UpOrDown2[i];
+         info.getClass();
+         if (var10000 == 1) {
+            Font.normalGFont.drawString(g, perAddP, this.W / 2 + 75, this.yPaint + 39 + i * 18, 3);
+         }
       }
+
    }
 
    public void getDetail() {
@@ -828,27 +804,18 @@ public class EquipScreen extends TabScreen {
       this.scroll = false;
       this.attribute = "";
       Equip eq = this.getEquipSelect();
-      if (eq == null) {
-         this.name = "";
-         this.wName = 0;
-         this.wDetail = 0;
-         return;
-      }
-      this.xName = this.W / 2 - 4;
-      this.name = eq.name == null || eq.name.trim().isEmpty() ? "Trang bị #" + eq.id : eq.name;
-      this.wName = Font.normalFont.getWidth(this.name);
-      if (eq.isMaterial) {
-         this.attribute = eq.strDetail == null ? "" : eq.strDetail;
-      } else {
-         try {
+      if (eq != null) {
+         this.xName = this.W / 2 - 4;
+         this.wName = Font.normalFont.getWidth(eq.name);
+         this.name = eq.name;
+         if (eq.isMaterial) {
+            this.attribute = eq.strDetail;
+         } else {
             this.attribute = eq.getStrInvDetail();
-         } catch (RuntimeException detailError) {
-            CRes.out("[EQUIP] Bad inventory detail id=" + eq.id + ": " + detailError);
-            this.attribute = "";
          }
+
+         this.wDetail = Font.normalFont.getWidth(this.name);
       }
-      if (this.attribute == null) this.attribute = "";
-      this.wDetail = Font.normalFont.getWidth(this.name);
    }
 
    public Position transTextLimit(Position pos, int limit) {
@@ -865,69 +832,58 @@ public class EquipScreen extends TabScreen {
    }
 
    public void paintMoney(mGraphics g) {
-      PlayerInfo m = TerrainMidlet.myInfo;
-      if (m == null) return;
       g.setColor(1521982);
-      g.setClip(this.W / 2 - 9, this.yPaint + 130, 95, 60);
-      g.fillRoundRect(this.W / 2 - 9, this.yPaint + 130, 95, 16, 6, 6, false);
-      g.fillRoundRect(this.W / 2 - 9, this.yPaint + 148, 95, 16, 6, 6, false);
+      g.setClip(this.W / 2 - 9, this.yPaint + 40 + 90, 95, 60);
+      g.fillRoundRect(this.W / 2 - 9, this.yPaint + 40 + 90, 95, 16, 6, 6, false);
+      g.fillRoundRect(this.W / 2 - 9, this.yPaint + 58 + 90, 95, 16, 6, 6, false);
+      PlayerInfo m = TerrainMidlet.myInfo;
       String money = CRes.getMoneys(m.xu) + Language.xu() + "-" + m.luong + Language.luong2();
-      Font.normalYFont.drawString(g, money, this.xName + this.cc, this.yPaint + 131, 0);
-      Font.normalGFont.drawString(g, this.name == null ? "" : this.name,
-              this.W / 2 - 4 + this.dx + this.ee, this.yPaint + 149, 0);
+      int yMoney = this.yPaint + 41 + 90;
+      Font.normalYFont.drawString(g, money, this.xName + this.cc, yMoney, 0);
+      int xName = this.W / 2 - 4;
+      int yName = this.yPaint + 59 + 90;
+      Font.normalGFont.drawString(g, this.name, xName + this.dx + this.ee, yName, 0);
       g.setClip(0, 0, CCanvas.width, CCanvas.hieght);
    }
 
    public void setCurrEquip() {
-      PlayerInfo info = TerrainMidlet.myInfo;
-      if (info == null || info.myEquip == null || info.myEquip.equips == null) {
-         for (int i = 0; i < this.currEq.length; ++i) {
-            this.currEq[i] = null;
-         }
-         return;
-      }
       for(int i = 0; i < 5; ++i) {
-         short id = -1;
-         if (i < info.myEquip.equips.length && info.myEquip.equips[i] != null) {
-            id = info.myEquip.equips[i].id;
+         PlayerInfo info = TerrainMidlet.myInfo;
+         byte id = -1;
+         if (info.myEquip.equips[i] != null) {
+            id = (byte)info.myEquip.equips[i].id;
          }
+
          this.currEq[i] = PlayerEquip.getEquip(info.gun, (byte)i, id);
       }
+
    }
 
    public void paintPlayer(mGraphics g) {
-      int selectedSlot = Math.max(0, Math.min(this.xE.length - 1, this.ind));
       g.setColor(16767817);
-      g.drawRect(this.xE[selectedSlot] - 9, this.yE[selectedSlot] - 9, 17, 17, false);
-      g.drawRect(this.xE[selectedSlot] - 10, this.yE[selectedSlot] - 10, 19, 19, false);
+      g.drawRect(this.xE[this.ind] - 9, this.yE[this.ind] - 9, 17, 17, false);
+      g.drawRect(this.xE[this.ind] - 10, this.yE[this.ind] - 10, 19, 19, false);
       g.setColor(1521982);
-      g.drawRect(this.xE[selectedSlot] - 11, this.yE[selectedSlot] - 11, 21, 21, false);
+      g.drawRect(this.xE[this.ind] - 11, this.yE[this.ind] - 11, 21, 21, false);
 
-      for(int i = 0; i < 5 && i < this.currEq.length; ++i) {
-         if (GameScr.s_imgITEM != null && GameScr.s_imgITEM.image != null) {
-            this.paintEquip(g, GameScr.s_imgITEM.image, this.xE[i], this.yE[i]);
-         }
+      for(int i = 0; i < 5; ++i) {
+         this.paintEquip(g, GameScr.s_imgITEM.image, this.xE[i], this.yE[i]);
          if (this.currEq[i] != null) {
             this.currEq[i].drawIcon(g, this.xE[i] - 8, this.yE[i] - 8, true);
-         } else if (GameScr.s_imgITEM != null && GameScr.s_imgITEM.image != null) {
+         } else {
             g.drawRegion(GameScr.s_imgITEM, 0, 0, 16, 16, 0, this.xE[i], this.yE[i], 3, true);
          }
       }
 
       PlayerInfo myInfo = TerrainMidlet.myInfo;
-      if (myInfo == null) return;
       int gun = myInfo.gun;
-      int gunIndex = myInfo.gun & 255;
-      if (TerrainMidlet.isVip != null && gunIndex < TerrainMidlet.isVip.length && TerrainMidlet.isVip[gunIndex]
-              && myInfo.myVipEquip != null) {
+      if (TerrainMidlet.isVip[myInfo.gun]) {
          this.equip = myInfo.myVipEquip;
       } else {
          this.equip = myInfo.myEquip;
       }
-      if (this.equip != null) {
-         CPlayer.paintSimplePlayer(gun, CCanvas.gameTick % 5 > 2 ? 5 : 4,
-                 CCanvas.width / 2 - 52, this.yPaint + 71, 0, this.equip, g);
-      }
+
+      CPlayer.paintSimplePlayer(gun, CCanvas.gameTick % 5 > 2 ? 5 : 4, CCanvas.width / 2 - 52, this.yPaint + 71, 0, this.equip, g);
    }
 
    public void paint(mGraphics g) {
@@ -940,41 +896,51 @@ public class EquipScreen extends TabScreen {
    }
 
    public void seeNextAttribute() {
-      if (this.myEquips == null || this.myEquips.isEmpty()) return;
-      PlayerInfo m = TerrainMidlet.myInfo;
-      Equip e = this.getEquipSelect();
-      if (m == null || e == null || m.myEquip == null || m.myEquip.equips == null) return;
-      int type = e.type & 255;
-      Equip currE = type < m.myEquip.equips.length ? m.myEquip.equips[type] : null;
-      if (e.isMaterial || this.isCompine || e.vip == 1) currE = e;
-      try {
-         m.compareEquip(e, currE);
-      } catch (RuntimeException compareError) {
-         CRes.out("[EQUIP] Compare failed id=" + e.id + ": " + compareError);
+      if (this.myEquips.size() != 0) {
+         try {
+            PlayerInfo m = TerrainMidlet.myInfo;
+            Equip e = this.getEquipSelect();
+            if (e == null) {
+               return;
+            }
+
+            Equip currE = null;
+            PlayerEquip.getEquip(m.gun, e.type, m.equipID[m.gun][e.type]);
+            currE = m.myEquip.equips[e.type];
+            if (e.isMaterial || this.isCompine || e.vip == 1) {
+               currE = e;
+            }
+
+            m.compareEquip(e, currE);
+            this.getDetail();
+            this.transText2.x = -1;
+         } catch (Exception var4) {
+            var4.printStackTrace();
+         }
+
       }
-      this.getDetail();
-      this.transText2.x = -1;
    }
 
    public void update() {
       super.update();
-      this.num = this.myEquips == null ? 0 : this.myEquips.size();
-      this.center = this.num > 0 ? this.cmdSelect : null;
+      this.num = this.myEquips.size();
+      this.center = this.cmdSelect;
       this.left = this.menu;
       this.itemCamera();
       PlayerInfo m = TerrainMidlet.myInfo;
-      if (m == null) return;
-      int gun = m.gun & 255;
-      if (m.equipVipID != null && gun < m.equipVipID.length && m.equipVipID[gun] != null && m.equipVipID[gun].length > 1) {
-         PlayerInfo.vipID = m.equipVipID[gun][1];
-      }
-      String money = CRes.getMoneys(m.xu) + Language.xu() + "-" + m.luong + Language.luong2();
+      PlayerInfo.vipID = m.equipVipID[m.gun][1];
+      String money = CRes.getMoneys(TerrainMidlet.myInfo.xu) + Language.xu() + "-" + TerrainMidlet.myInfo.luong + Language.luong2();
       int bb = Font.normalFont.getWidth(money);
-      if (bb > 85) this.transTextLimit(this.transText1, bb - 80);
+      if (bb > 85) {
+         this.transTextLimit(this.transText1, bb - 80);
+      }
+
       this.cc = this.transText1.x;
-      String safeName = this.name == null ? "" : this.name;
-      int dd = Font.normalFont.getWidth(safeName);
-      if (dd > 85) this.transTextLimit(this.transText2, dd - 80);
+      int dd = Font.normalFont.getWidth(this.name);
+      if (dd > 85) {
+         this.transTextLimit(this.transText2, dd - 80);
+      }
+
       this.ee = this.transText2.x;
    }
 

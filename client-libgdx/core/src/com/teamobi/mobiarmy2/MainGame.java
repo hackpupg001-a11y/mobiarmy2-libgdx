@@ -424,23 +424,8 @@ public class MainGame implements ApplicationListener {
         }
 
         public boolean keyDown(int keycode) {
-            if (keycode == Input.Keys.F5) {
-                // Dedicated V10 power shortcut requested for desktop play.
-                // F5 opens LỰC MAX directly; F6 remains the V10 submenu.
-                if (CCanvas.currentDialog == null && CCanvas.curScr instanceof GameScr) {
-                    ((GameScr) CCanvas.curScr).showMaxForceInput();
-                }
-                return true;
-            }
             if (keycode == Input.Keys.F6) {
-                // V10 desktop shortcut: in battle open the actual V10 menu
-                // recovered from the 2.3.0 JAR.  Outside battle keep the old
-                // 360-degree toggle so F6 never becomes a dead key.
-                if (CCanvas.currentDialog == null && CCanvas.curScr instanceof GameScr) {
-                    ((GameScr)CCanvas.curScr).showV10Menu();
-                } else if (CCanvas.currentDialog == null) {
-                    ModSettings.toggleAngle360();
-                }
+                ModSettings.toggleAngle360();
                 return true;
             }
             if (keycode == Input.Keys.F7) {

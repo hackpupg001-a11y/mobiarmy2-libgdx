@@ -1,6 +1,5 @@
 package network;
 
-import mod.ModSettings;
 import CLib.RMS;
 import CLib.mImage;
 import CLib.mSystem;
@@ -287,12 +286,16 @@ public class MessageHandler implements IMessageHandler {
                                 playerInfo.level2 = msg.reader().readUnsignedByte();
                                 playerInfo.getQuanHam();
                                 playerInfo.gun = msg.reader().readByte();
+                                int gunSlot = playerInfo.gun & 255;
                                 int i = 0;
                                 while (i < 5) {
-                                    playerInfo.equipID[playerInfo.gun][i] = msg.reader().readShort();
-                                    playerInfo.getMyEquip(1);
+                                    short equipId = msg.reader().readShort();
+                                    if (gunSlot < playerInfo.equipID.length) {
+                                        playerInfo.equipID[gunSlot][i] = equipId;
+                                    }
                                     ++i;
                                 }
+                                playerInfo.getMyEquip(1);
                                 playerInfo.isReady = msg.reader().readBoolean();
                             }
                             players.addElement(playerInfo);
@@ -329,12 +332,16 @@ public class MessageHandler implements IMessageHandler {
                         joinPersonInfo.level2 = msg.reader().readUnsignedByte();
                         joinPersonInfo.getQuanHam();
                         joinPersonInfo.gun = msg.reader().readByte();
+                        int gunSlot = joinPersonInfo.gun & 255;
                         int i = 0;
                         while (i < 5) {
-                            joinPersonInfo.equipID[joinPersonInfo.gun][i] = msg.reader().readShort();
-                            joinPersonInfo.getMyEquip(2);
+                            short equipId = msg.reader().readShort();
+                            if (gunSlot < joinPersonInfo.equipID.length) {
+                                joinPersonInfo.equipID[gunSlot][i] = equipId;
+                            }
                             ++i;
                         }
+                        joinPersonInfo.getMyEquip(2);
                         joinPersonInfo.isReady = false;
                         CCanvas.prepareScr.setAt(seat, joinPersonInfo);
                         GameService.gI().getClanIcon(joinPersonInfo.clanID);
@@ -406,14 +413,16 @@ public class MessageHandler implements IMessageHandler {
                             info.level2 = msg.reader().readUnsignedByte();
                             info.level2Percen = msg.reader().readByte();
                             info.getQuanHam();
-                            short[] idEq = new short[5];
+                            int gunSlot = info.gun & 255;
                             int i = 0;
                             while (i < 5) {
-                                idEq[i] = msg.reader().readShort();
-                                info.equipID[info.gun][i] = idEq[i];
-                                info.getMyEquip(3);
+                                short equipId = msg.reader().readShort();
+                                if (gunSlot < info.equipID.length) {
+                                    info.equipID[gunSlot][i] = equipId;
+                                }
                                 ++i;
                             }
+                            info.getMyEquip(3);
                             friendList.addElement(info);
                         }
                         this.gameLogicHandler.onFriendList(friendList);
@@ -509,14 +518,7 @@ public class MessageHandler implements IMessageHandler {
                         break;
                     }
                     case 46: {
-                        // V10 option "NHẬN LOA LỚN": the original client always
-                        // consumes this UTF packet, but only forwards it to the UI
-                        // when the toggle is enabled.  Consuming it is important so
-                        // the stream never becomes misaligned.
-                        String bigSpeaker = msg.reader().readUTF();
-                        if (ModSettings.receiveBigSpeaker) {
-                            this.gameLogicHandler.onServerInfo(bigSpeaker);
-                        }
+                        this.gameLogicHandler.onServerInfo(msg.reader().readUTF());
                         break;
                     }
                     case 48: {
@@ -586,17 +588,16 @@ public class MessageHandler implements IMessageHandler {
                         } else {
                             CCanvas.menuScr.doTraining(mapID, time, playerX, playerY, maxHP, equipID);
                         }
-                        if (CCanvas.prepareScr.itemCur[4] >= 0) {
-                            ShopItem.getI((int) 12).num = (byte) (ShopItem.getI((int) 12).num - 1);
-                        }
-                        if (CCanvas.prepareScr.itemCur[5] >= 0) {
-                            ShopItem.getI((int) 13).num = (byte) (ShopItem.getI((int) 13).num - 1);
-                        }
-                        if (CCanvas.prepareScr.itemCur[6] >= 0) {
-                            ShopItem.getI((int) 14).num = (byte) (ShopItem.getI((int) 14).num - 1);
-                        }
-                        if (CCanvas.prepareScr.itemCur[7] >= 0) {
-                            ShopItem.getI((int) 15).num = (byte) (ShopItem.getI((int) 15).num - 1);
+                        if (CCanvas.prepareScr != null && CCanvas.prepareScr.itemCur != null) {
+                            int[] consumableIds = new int[]{12, 13, 14, 15};
+                            for (int slot = 4; slot <= 7 && slot < CCanvas.prepareScr.itemCur.length; ++slot) {
+                                if (CCanvas.prepareScr.itemCur[slot] >= 0) {
+                                    Item shopItem = ShopItem.getI(consumableIds[slot - 4]);
+                                    if (shopItem != null) {
+                                        shopItem.num = (byte) (shopItem.num - 1);
+                                    }
+                                }
+                            }
                         }
                         CCanvas.endDlg();
                         CCanvas.menu.showMenu = false;
@@ -1037,9 +1038,13 @@ public class MessageHandler implements IMessageHandler {
                                 info.xu = msg.reader().readInt();
                                 info.level2 = msg.reader().readUnsignedByte();
                                 info.level2Percen = msg.reader().readUnsignedByte();
+                                int gunSlot = info.gun & 255;
                                 int a = 0;
                                 while (a < 5) {
-                                    info.equipID[info.gun][a] = msg.reader().readShort();
+                                    short equipId = msg.reader().readShort();
+                                    if (gunSlot < info.equipID.length) {
+                                        info.equipID[gunSlot][a] = equipId;
+                                    }
                                     ++a;
                                 }
                                 info.getQuanHam();
@@ -1373,11 +1378,10 @@ public class MessageHandler implements IMessageHandler {
                             byte dte = msg.reader().readByte();
                             byte vip = msg.reader().readByte();
                             int level2 = msg.reader().readUnsignedByte();
-                            Equip equip = PlayerEquip.createEquip(gl, tp, idb);
+                            Equip equip = PlayerEquip.getEquip(gl, tp, idb);
+                            equip.getInvAtribute(ab);
                             Equip tam = null;
                             if (equip != null) {
-                                equip.removeAbility();
-                                equip.getInvAtribute(ab);
                                 tam = new Equip();
                                 tam.id = equip.id;
                                 tam.type = equip.type;
@@ -1402,21 +1406,11 @@ public class MessageHandler implements IMessageHandler {
                                     tam.inv_percen[a2] = equip.inv_percen[a2];
                                     ++a2;
                                 }
-                                int equipType = tam.type & 255;
-                                if (TerrainMidlet.myInfo != null
-                                        && TerrainMidlet.myInfo.myEquip != null
-                                        && TerrainMidlet.myInfo.myEquip.equips != null
-                                        && equipType < TerrainMidlet.myInfo.myEquip.equips.length
-                                        && TerrainMidlet.myInfo.myEquip.equips[equipType] != null
-                                        && TerrainMidlet.myInfo.myEquip.equips[equipType].id == tam.id) {
-                                    TerrainMidlet.myInfo.myEquip.equips[equipType].dbKey = dbKey;
+                                if (TerrainMidlet.myInfo.myEquip.equips[tam.type] != null && TerrainMidlet.myInfo.myEquip.equips[tam.type].id == tam.id) {
+                                    TerrainMidlet.myInfo.myEquip.equips[tam.type].dbKey = dbKey;
                                 }
                             }
-                            if (tam != null) {
-                                CCanvas.equipScreen.addEquip(tam);
-                            } else {
-                                CRes.out("[EQUIP] Ignored unknown inventory template glass=" + gl + " type=" + tp + " id=" + idb);
-                            }
+                            CCanvas.equipScreen.addEquip(tam);
                         }
                         if (action == 1) {
                             String info = msg.reader().readUTF();
@@ -1428,11 +1422,7 @@ public class MessageHandler implements IMessageHandler {
                             while (i < 10) {
                                 int j = 0;
                                 while (j < 5) {
-                                    short equipId = msg.reader().readShort();
-                                    if (p != null && p.equipID != null && i < p.equipID.length
-                                            && p.equipID[i] != null && j < p.equipID[i].length) {
-                                        p.equipID[i][j] = equipId;
-                                    }
+                                    p.equipID[i][j] = msg.reader().readShort();
                                     ++j;
                                 }
                                 ++i;
@@ -1474,12 +1464,11 @@ public class MessageHandler implements IMessageHandler {
                             vip[i] = msg.reader().readByte();
                             level2[i] = msg.reader().readUnsignedByte();
                             Equip e = PlayerEquip.createEquip(glassI[i], typeI[i], idI[i]);
-                            Equip tam = null;
+                            e.level2 = level2[i];
+                            e.removeAbility();
+                            e.getInvAtribute(currAb);
+                            Equip tam = new Equip();
                             if (e != null) {
-                                e.level2 = level2[i];
-                                e.removeAbility();
-                                e.getInvAtribute(currAb);
-                                tam = new Equip();
                                 e.date = date[i];
                                 e.name = name[i];
                                 tam.id = e.id;
@@ -1504,22 +1493,15 @@ public class MessageHandler implements IMessageHandler {
                                 tam.removeAbility();
                                 tam.getInvAtribute(currAb);
                                 inventory.addElement(tam);
-                            } else {
-                                CRes.out("[EQUIP] Inventory template missing glass=" + glassI[i] + " type=" + typeI[i] + " id=" + idI[i]);
                             }
                             ++i;
                         }
                         i = 0;
                         while (i < 5) {
                             int myDbKey = msg.reader().readInt();
-                            if (TerrainMidlet.myInfo != null && TerrainMidlet.myInfo.myEquip != null
-                                    && TerrainMidlet.myInfo.myEquip.equips != null
-                                    && i < TerrainMidlet.myInfo.myEquip.equips.length
-                                    && TerrainMidlet.myInfo.myEquip.equips[i] != null) {
+                            if (TerrainMidlet.myInfo.myEquip.equips[i] != null) {
                                 TerrainMidlet.myInfo.myEquip.equips[i].dbKey = myDbKey;
-                                if (TerrainMidlet.myInfo.dbKey != null && i < TerrainMidlet.myInfo.dbKey.length) {
-                                    TerrainMidlet.myInfo.dbKey[i] = myDbKey;
-                                }
+                                TerrainMidlet.myInfo.dbKey[i] = myDbKey;
                             }
                             ++i;
                         }
@@ -1572,7 +1554,7 @@ public class MessageHandler implements IMessageHandler {
                             int luongE = msg.reader().readInt();
                             byte dateE = msg.reader().readByte();
                             byte levelE = msg.reader().readByte();
-                            Equip eq = PlayerEquip.createEquip(glassID, typeE, idE);
+                            Equip eq = PlayerEquip.getEquip(glassID, typeE, idE);
                             if (eq != null) {
                                 eq.date = dateE;
                                 eq.name = nameE;
@@ -1750,14 +1732,16 @@ public class MessageHandler implements IMessageHandler {
                             info1.STT = msg.reader().readUnsignedByte();
                             info1.cup = msg.reader().readInt();
                             info1.getQuanHam();
-                            short[] idEq = new short[5];
+                            int gunSlot = info1.gun & 255;
                             int i = 0;
                             while (i < 5) {
-                                idEq[i] = msg.reader().readShort();
-                                info1.equipID[info1.gun][i] = idEq[i];
-                                info1.getMyEquip(6);
+                                short equipId = msg.reader().readShort();
+                                if (gunSlot < info1.equipID.length) {
+                                    info1.equipID[gunSlot][i] = equipId;
+                                }
                                 ++i;
                             }
+                            info1.getMyEquip(6);
                             info1.clanContribute1 = msg.reader().readUTF();
                             info1.clanContribute2 = msg.reader().readUTF();
                             clanMember.addElement(info1);
@@ -2011,32 +1995,20 @@ public class MessageHandler implements IMessageHandler {
                                 if (CCanvas.curScr == CCanvas.equipScreen) {
                                     tam = CCanvas.equipScreen.getEquip(IdbKey);
                                 }
-                                if (tam == null) {
-                                    CRes.out("[EQUIP] Inventory update ignored: missing dbKey=" + IdbKey);
-                                } else {
-                                    tam.getInvAtribute(IAb);
-                                    tam.slot = slotUpdate;
-                                    tam.date = dateUpdate;
-                                    if (CCanvas.curScr == CCanvas.inventory) {
-                                        CCanvas.inventory.getDetail();
-                                    }
-                                    if (CCanvas.curScr == CCanvas.equipScreen) {
-                                        CCanvas.equipScreen.getDetail();
-                                    }
-                                    int equipType = tam.type & 255;
-                                    if (TerrainMidlet.myInfo != null
-                                            && TerrainMidlet.myInfo.myEquip != null
-                                            && TerrainMidlet.myInfo.myEquip.equips != null
-                                            && equipType < TerrainMidlet.myInfo.myEquip.equips.length
-                                            && TerrainMidlet.myInfo.myEquip.equips[equipType] != null
-                                            && TerrainMidlet.myInfo.myEquip.equips[equipType].dbKey == tam.dbKey) {
-                                        TerrainMidlet.myInfo.myEquip.equips[equipType].changeToEquip(tam);
-                                        TerrainMidlet.myInfo.clearAttAddPoint();
-                                    }
-                                    if (CCanvas.equipScreen != null) {
-                                        CCanvas.equipScreen.getBaseAttribute();
-                                    }
+                                tam.getInvAtribute(IAb);
+                                tam.slot = slotUpdate;
+                                tam.date = dateUpdate;
+                                if (CCanvas.curScr == CCanvas.inventory) {
+                                    CCanvas.inventory.getDetail();
                                 }
+                                if (CCanvas.curScr == CCanvas.equipScreen) {
+                                    CCanvas.equipScreen.getDetail();
+                                }
+                                if (TerrainMidlet.myInfo.myEquip.equips[tam.type] != null && TerrainMidlet.myInfo.myEquip.equips[tam.type].dbKey == tam.dbKey) {
+                                    TerrainMidlet.myInfo.myEquip.equips[tam.type].changeToEquip(tam);
+                                    TerrainMidlet.myInfo.clearAttAddPoint();
+                                }
+                                CCanvas.equipScreen.getBaseAttribute();
                             } else if (IAction2 == 1) {
                                 IdMaterial = msg.reader().readByte();
                                 String nameMaterial = msg.reader().readUTF();
@@ -2143,7 +2115,10 @@ public class MessageHandler implements IMessageHandler {
                         int i = 0;
                         while (i < 5) {
                             int currDbKey = msg.reader().readInt();
-                            if (TerrainMidlet.myInfo.myEquip.equips[i] != null) {
+                            if (TerrainMidlet.myInfo != null && TerrainMidlet.myInfo.myEquip != null &&
+                                    TerrainMidlet.myInfo.myEquip.equips != null &&
+                                    i < TerrainMidlet.myInfo.myEquip.equips.length &&
+                                    TerrainMidlet.myInfo.myEquip.equips[i] != null) {
                                 TerrainMidlet.myInfo.myEquip.equips[i].dbKey = currDbKey;
                             }
                             ++i;
@@ -2205,9 +2180,13 @@ public class MessageHandler implements IMessageHandler {
                             myPlayers.level2Percen = msg.reader().readByte();
                             myPlayers.getQuanHam();
                             myPlayers.STT = msg.reader().readUnsignedByte();
+                            int gunSlot = myPlayers.gun & 255;
                             int i = 0;
                             while (i < 5) {
-                                myPlayers.equipID[myPlayers.gun][i] = msg.reader().readShort();
+                                short equipId = msg.reader().readShort();
+                                if (gunSlot < myPlayers.equipID.length) {
+                                    myPlayers.equipID[gunSlot][i] = equipId;
+                                }
                                 ++i;
                             }
                             myPlayers.aa = msg.reader().readUTF();
@@ -2309,14 +2288,6 @@ public class MessageHandler implements IMessageHandler {
                                 byte typeFomula = msg.reader().readByte();
                                 CRes.out("id item create= " + idItemCreate + " type Fomula= " + typeFomula + " gun= " + gunFomula);
                                 fomula.e = PlayerEquip.createEquip(gunFomula, typeFomula, idItemCreate);
-                                if (fomula.e == null) {
-                                    fomula.e = new Equip();
-                                    fomula.e.glass = gunFomula;
-                                    fomula.e.type = typeFomula;
-                                    fomula.e.id = idItemCreate;
-                                    CRes.out("[EQUIP] Formula output template missing glass=" + gunFomula
-                                            + " type=" + typeFomula + " id=" + idItemCreate);
-                                }
                                 fomula.e.name = nameEquip;
                                 CRes.out("Name equip= " + nameEquip);
                                 fomula.levelRequire = leveRequire;
@@ -2360,14 +2331,6 @@ public class MessageHandler implements IMessageHandler {
                                 fomula.isHave = isHave;
                                 CRes.out("is Have= " + isHave);
                                 fomula.equipRequire = PlayerEquip.createEquip(gunFomula, typeFomula, idEquipRequire);
-                                if (fomula.equipRequire == null) {
-                                    fomula.equipRequire = new Equip();
-                                    fomula.equipRequire.glass = gunFomula;
-                                    fomula.equipRequire.type = typeFomula;
-                                    fomula.equipRequire.id = idEquipRequire;
-                                    CRes.out("[EQUIP] Formula requirement template missing glass=" + gunFomula
-                                            + " type=" + typeFomula + " id=" + idEquipRequire);
-                                }
                                 fomula.equipRequire.name = nameEquipRequire;
                                 fomula.finish = isFinish;
                                 CRes.out("is Finish= " + isFinish);

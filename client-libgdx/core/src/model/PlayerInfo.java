@@ -67,8 +67,11 @@ public class PlayerInfo {
 
     public void setAllEquipEffect() {
         this.getAttribute();
+        if (this.myEquip == null || this.myEquip.equips == null) {
+            return;
+        }
 
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < this.myEquip.equips.length && i < 5; ++i) {
             if (this.myEquip.equips[i] != null) {
                 this.myEquip.equips[i].setInvAtribute();
                 this.addCurrEquip(this.myEquip.equips[i]);
@@ -79,20 +82,30 @@ public class PlayerInfo {
 
     public void getMyEquip(int index) {
         CRes.err(" ================> getMyEquip() " + index);
-        short[] sung = new short[]{this.gun, 0, this.equipID[this.gun][0]};
-        short[] non = new short[]{this.gun, 1, this.equipID[this.gun][1]};
-        short[] giap = new short[]{this.gun, 2, this.equipID[this.gun][2]};
-        short[] kinh = new short[]{this.gun, 3, this.equipID[this.gun][3]};
-        short[] canh = new short[]{this.gun, 4, this.equipID[this.gun][4]};
+        int gunSlot = this.gun & 255;
+        if (gunSlot >= this.equipID.length) {
+            this.myEquip = new PlayerEquip();
+            return;
+        }
+        short[] sung = new short[]{this.gun, 0, this.equipID[gunSlot][0]};
+        short[] non = new short[]{this.gun, 1, this.equipID[gunSlot][1]};
+        short[] giap = new short[]{this.gun, 2, this.equipID[gunSlot][2]};
+        short[] kinh = new short[]{this.gun, 3, this.equipID[gunSlot][3]};
+        short[] canh = new short[]{this.gun, 4, this.equipID[gunSlot][4]};
         this.myEquip = new PlayerEquip(new short[][]{sung, non, giap, kinh, canh});
     }
 
     public void getVipEquip() {
-        short[] sung = new short[]{this.gun, 0, this.equipVipID[this.gun][0]};
-        short[] non = new short[]{this.gun, 1, this.equipVipID[this.gun][1]};
-        short[] giap = new short[]{this.gun, 2, this.equipVipID[this.gun][2]};
-        short[] kinh = new short[]{this.gun, 3, this.equipVipID[this.gun][3]};
-        short[] canh = new short[]{this.gun, 4, this.equipVipID[this.gun][4]};
+        int gunSlot = this.gun & 255;
+        if (gunSlot >= this.equipVipID.length) {
+            this.myVipEquip = new PlayerEquip();
+            return;
+        }
+        short[] sung = new short[]{this.gun, 0, this.equipVipID[gunSlot][0]};
+        short[] non = new short[]{this.gun, 1, this.equipVipID[gunSlot][1]};
+        short[] giap = new short[]{this.gun, 2, this.equipVipID[gunSlot][2]};
+        short[] kinh = new short[]{this.gun, 3, this.equipVipID[gunSlot][3]};
+        short[] canh = new short[]{this.gun, 4, this.equipVipID[gunSlot][4]};
         this.myVipEquip = new PlayerEquip(new short[][]{sung, non, giap, kinh, canh});
     }
 

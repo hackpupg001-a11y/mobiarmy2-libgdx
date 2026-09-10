@@ -1,18 +1,6 @@
 from pathlib import Path
 import re, sys
 
-# GitHub Actions Windows runners may expose CP1252 as the inherited console
-# encoding.  The verifier intentionally contains Vietnamese labels from the
-# client UI (for example "LỰC MAX"), so force a deterministic UTF-8 stream
-# before printing any check result.  errors='backslashreplace' also keeps the
-# verifier alive if a third-party runner cannot represent an unexpected glyph.
-for _stream in (sys.stdout, sys.stderr):
-    if hasattr(_stream, "reconfigure"):
-        try:
-            _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
-        except (AttributeError, ValueError):
-            pass
-
 ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / 'core' / 'src'
 DESKTOP = ROOT / 'desktop' / 'src'
@@ -57,13 +45,11 @@ check('login sends username/password/version UTF fields', login_block.count('wri
 
 # V10-style desktop QoL layer.
 mod = text('core/src/mod/ModSettings.java')
-check('360 aim defaults ON', 'angle360", true' in mod)
+check('360 HUD mode defaults OFF so V10 aim is authoritative', 'angle360", false' in mod)
 check('aim HUD defaults ON', 'showAimHud", true' in mod)
 main = text('core/src/com/teamobi/mobiarmy2/MainGame.java')
-for f, action in [('F7','toggleAimHud'),('F8','toggleAutoClick'),('F9','toggleOverlay')]:
+for f, action in [('F6','toggleAngle360'),('F7','toggleAimHud'),('F8','toggleAutoClick'),('F9','toggleOverlay')]:
     check(f'{f} hotkey wired', f'Input.Keys.{f}' in main and action in main)
-check('F5 opens LỰC MAX directly in battle', 'Input.Keys.F5' in main and 'showMaxForceInput()' in main)
-check('F6 opens the recovered V10 menu in battle', 'Input.Keys.F6' in main and 'showV10Menu()' in main)
 check('typed characters reach game text fields', 'gameCanvas.keyPressed((int) character)' in main)
 check('LibGDX Input hotkey type is imported', 'import com.badlogic.gdx.Input;' in main)
 check('LibGDX 1.12 scroll callback signature present', 'scrolled(float amountX, float amountY)' in main)
@@ -97,13 +83,21 @@ check('encoded find-room bridges to classic joinBoard', 'encoded / 1000' in svc 
 check('room packet parse failures close wait dialog', 'Lỗi dữ liệu phòng (cmd ' in text('core/src/network/MessageHandler.java'))
 
 cp = text('core/src/player/CPlayer.java')
-check('angleReset bypasses lock in 360 mode', 'public void angleReset()' in cp and 'if (ModSettings.angle360)' in cp)
-check('normal-shoot clamp bypasses lock in 360 mode', 'this.angle = ModSettings.normalize360(this.angle);' in cp)
-check('pointer aiming skips angleLock in 360 mode', 'if (!ModSettings.angle360)' in cp and 'a = ModSettings.normalize360(a);' in cp)
+check('V10 normal aim clamps left side to >=91 degrees', 'if (this.angle < 91)' in cp and 'this.angle = 91;' in cp)
+check('V10 normal aim clamps right side to <=89 degrees', 'if (this.angle > 89)' in cp and 'this.angle = 89;' in cp)
+check('360 display no longer normalizes gameplay/network angle', 'this.angle = ModSettings.normalize360(this.angle);' not in cp and 'a = ModSettings.normalize360(a);' not in cp)
 
 gs = text('core/src/screen/GameScr.java')
 check('HUD shows normalized 360 angle', 'ModSettings.normalize360(angle)' in gs and '360°' in gs)
-check('mod overlay shows dedicated F5 LỰC and F6 V10 menu', '[F5 LỰC/F6 MENU/F7/F8/F9]' in gs)
+check('mod overlay exists', '[F6/F7/F8/F9]' in gs)
+check('V10 trajectory preview is wired to crosshair', 'paintV10Trajectory(g);' in cp and 'drawV10Trajectory(' in cp)
+check('map values parser keeps outer map index intact', 'for (int valueIndex = 0; valueIndex < 5; ++valueIndex)' in ccanvas)
+handler = text('core/src/network/MessageHandler.java')
+check('board equipment packet resolves only after all 5 IDs are read', handler.find('playerInfo.getMyEquip(1);') > handler.find('while (i < 5)', handler.find('case 8:')))
+peq = text('core/src/Equipment/PlayerEquip.java')
+check('equipment rendering tolerates missing base gun/resource', 'hasBaseGun()' in peq and 'bad cosmetic/equipment frame' in peq.lower())
+pm = text('core/src/player/PM.java')
+check('battle player init validates packet array bounds', 'Math.min(requested' in pm and 'missing PlayerInfo at seat' in pm)
 
 # Desktop stability fixes found during audit.
 ses = text('core/src/network/Session_ME.java')
@@ -196,68 +190,6 @@ check('area list W/S keyboard navigation exists', 'updateKeyboardSelection()' in
 check('area list A/D page navigation exists', 'CCanvas.keyPressed[4]' in board and 'CCanvas.keyPressed[6]' in board)
 check('area list E returns to room list without mouse', 'CCanvas.roomListScr2.show();' in board and 'private void doExitBoardList()' in board)
 check('area list camera clamps short lists', 'if (cmyLim < 0)' in board and 'cmyLim = 0;' in board)
-
-
-# FIX14: V10 menu/trajectory + map/equipment/shop hardening.
-mod = text('core/src/mod/ModSettings.java')
-gs = text('core/src/screen/GameScr.java')
-cp = text('core/src/player/CPlayer.java')
-ccanvas = text('core/src/coreLG/CCanvas.java')
-prepare = text('core/src/screen/PrepareScr.java')
-shop_eq = text('core/src/shop/ShopEquipment.java')
-equip = text('core/src/Equipment/Equip.java')
-player_eq = text('core/src/Equipment/PlayerEquip.java')
-equip_scr = text('core/src/screen/EquipScreen.java')
-handler = text('core/src/network/MessageHandler.java')
-check('V10 recovered defaults are present', all(x in mod for x in [
-    'v10.drawHp", true', 'v10.drawAimGuide", true', 'v10.receiveBigSpeaker", true',
-    'v10.aimFrameMax", -1', 'v10.aimFrameStep", 1', 'v10.maxForce", 30', 'v10.secondMaxForce", 30']))
-for label in ['VẼ CĂN GÓC', 'VẼ HP', 'NHẬN LOA LỚN', 'CÀI SỐ FRAME', 'CÀI FRAME 2', 'XEM GIỜ', 'TRỞ LẠI']:
-    check('V10 menu contains ' + label, label in gs)
-check('pause menu keeps LỰC MAX as a separate command', 'new Command("LỰC MAX"' in gs and 'showMaxForceInput()' in gs)
-check('LỰC MAX primary and second-power inputs exist', '"Lực bắn"' in gs and '"Lực bắn 2"' in gs and 'setMaxForce(value)' in gs and 'setSecondMaxForce(value)' in gs)
-check('V10 force caps drive actual charge logic', 'primaryMaxForce = ModSettings.maxForce' in cp and 'secondMaxForce = ModSettings.secondMaxForce' in cp and 'this.force >= primaryMaxForce' in cp and 'this.force_2 >= secondMaxForce' in cp)
-check('V10 aim renderer is integrated into player paint', 'paintV10AimGuide(g)' in cp and 'drawV10Trajectory' in cp and 'ModSettings.drawAimGuide' in cp)
-check('V10 frame max/step controls trajectory output', 'ModSettings.aimFrameMax < 0 || frame < ModSettings.aimFrameMax' in cp and 'frame % Math.max(1, ModSettings.aimFrameStep)' in cp)
-check('V10 gun 6 secondary branch matches recovered zero-velocity spawn', 'nextY + 8, 0, 0' in cp and 'ax / 2, ay / 2, 30, 16776960' in cp)
-check('big-speaker packet 46 is always consumed and display is gated', 'case 46:' in handler and 'String bigSpeaker = msg.reader().readUTF();' in handler and 'if (ModSettings.receiveBigSpeaker)' in handler)
-check('map metadata parser does not reuse outer map index', 'for (int j = 0; j < 5; ++j)' in ccanvas and 'values[j] = msg.reader().readShort();' in ccanvas)
-check('fresh-login icondata/valuesdata ordering rebuilds map previews', 'deferred until valuesdata2/map metadata arrives' in prepare and 'if (PrepareScr.fileData != null)' in ccanvas and 'PrepareScr.init();' in ccanvas)
-check('map names have non-null fallback', 'safeMapName' in prepare and '"Map " + (index + 1)' in prepare)
-check('map preview preserves server/filepack image before packaged fallback', 'loadMapPreview' in prepare and 'if (imgMap[i] == null)' in prepare and 'safeMapFileName' in prepare)
-check('shop equipment empty selection is guarded', 'hasSelection()' in shop_eq and 'clearSelectionDetail()' in shop_eq)
-check('shop detail null test uses AND not crash-prone OR', 'this.eSelect != null && this.eSelect.shopDetailNunStrs != null' in shop_eq)
-check('equipment template lookup is null-safe', 'if (tam == null)' in player_eq and 'return null;' in player_eq)
-check('shop/equipment clones mutable template arrays', 'e.shop_ability = tam.shop_ability.clone()' in player_eq and 'e.shop_percen = tam.shop_percen.clone()' in player_eq and 'e.shop_attAddPoint = tam.shop_attAddPoint.clone()' in player_eq)
-check('equipment drawing skips missing image/frame data', '|| !hasFrame(Frame)' in equip and 'private boolean hasFrame(int frameIndex)' in equip)
-check('inventory update ignores unknown dbKey instead of NPE', 'Inventory update ignored: missing dbKey=' in handler and 'if (tam == null)' in handler)
-check('inventory add/update validates equipped-slot bounds', 'int equipType = tam.type & 255;' in handler and handler.count('equipType < TerrainMidlet.myInfo.myEquip.equips.length') >= 2)
-check('formula equipment tolerates missing client templates', 'Formula output template missing' in handler and 'Formula requirement template missing' in handler)
-check('equip click validates player/template bounds', 'player equipment state is not ready' in equip_scr and 'missing equipID gun=' in equip_scr)
-check('equip click exceptions are logged instead of silently swallowed', 'Equip click failed safely:' in equip_scr)
-
-# FIX16: fresh-login crash regression gates.
-image_src = text('core/src/CLib/Image.java')
-graphics_src = text('core/src/CLib/mGraphics.java')
-room_map = text('core/src/screen/RoomListScr.java')
-check('fresh login does not construct RoomListScr before map metadata',
-      prepare.index('int mapCount = MM.NUM_MAP & 255;') < prepare.index('CCanvas.roomListScr = new RoomListScr();'))
-check('map fallback no longer creates res/res path',
-      'getClassPathConfig(CONFIG.PATH_MAP + "map" + i + ".png")' not in prepare
-      and 'String imagePath = "/" + CONFIG.PATH_MAP + "map" + i + ".png";' in prepare)
-check('map fallback checks packaged resource existence before texture load',
-      'Gdx.files.internal(LibSysTem.res + imagePath)' in prepare and 'handle.exists()' in prepare)
-check('room map icon array resizes after NUM_MAP metadata arrives',
-      '_iconX == null || _iconX.length < nMap' in room_map and '_iconX = new int[nMap];' in room_map)
-check('room map static state is independent of pre-metadata NUM_MAP',
-      'nMap = 0;' in room_map and '_iconX = new int[0];' in room_map and '_iconX = new int[MM.NUM_MAP];' not in room_map)
-check('room map tolerates boss-map metadata arriving later',
-      'PrepareScr.mapBossID == null ? 0 : PrepareScr.mapBossID.length' in room_map)
-check('async image loader catches optional-resource failures on render thread',
-      '[IMAGE] missing resource:' in image_src and '[IMAGE] packed image decode failed:' in image_src
-      and image_src.count('catch (RuntimeException imageError)') >= 4)
-check('common image drawing skips pending/null textures',
-      graphics_src.count('img.image.texture == null') >= 2 and graphics_src.count('img.image.texture != null') >= 4 and 'tx.image.tRegion == null' in graphics_src)
 
 failed = [n for n, ok, _ in checks if not ok]
 print(f'\nSUMMARY: {len(checks)-len(failed)}/{len(checks)} checks PASS')

@@ -84,25 +84,21 @@ public class Equip {
     public int[] getBaseAttribute() {
         int[] atts = new int[5];
         PlayerInfo info = TerrainMidlet.myInfo;
-        if (info == null || info.ability == null || info.attribute == null) {
-            return atts;
-        }
-
         int[] ability = new int[5];
         int[] percen = new int[5];
+
         for (int i = 0; i < 5; ++i) {
-            ability[i] += arrayValue(this.inv_ability, i);
-            percen[i] += arrayValue(this.inv_percen, i);
+            ability[i] += this.inv_ability[i];
+            percen[i] += this.inv_percen[i];
         }
 
         atts[0] = ability[0] * 10;
-        atts[0] += (1000 + arrayValue(info.ability, 0) * 10) * percen[0] / 100;
-        EquipGlass glassInfo = PlayerEquip.getEquipGlass(info.gun);
-        int maxDamage = glassInfo == null ? 0 : glassInfo.maxDamage;
-        int damPoint = ability[1] + arrayValue(info.attribute, 1);
-        int defPoint = ability[2] + arrayValue(info.attribute, 2);
-        int luckPoint = ability[3] + arrayValue(info.attribute, 3);
-        int team = ability[4] + arrayValue(info.attribute, 4);
+        atts[0] += (1000 + info.ability[0] * 10) * percen[0] / 100;
+        int maxDamage = PlayerEquip.getEquipGlass(info.gun).maxDamage;
+        int damPoint = ability[1] + info.attribute[1];
+        int defPoint = ability[2] + info.attribute[2];
+        int luckPoint = ability[3] + info.attribute[3];
+        int team = ability[4] + info.attribute[4];
         atts[1] = maxDamage * (damPoint / 3 + 100 + percen[1]) / 100;
         atts[2] = defPoint * 10;
         atts[2] += atts[2] * percen[2] / 100;
@@ -115,14 +111,15 @@ public class Equip {
 
     public void setInvAtribute() {
         PlayerInfo m = TerrainMidlet.myInfo;
+
         for (int i = 0; i < 5; ++i) {
             this.inv_attAddPoint[i] = 0;
-            this.inv_attAddPoint[i] = (short)(this.inv_attAddPoint[i] + arrayValue(this.inv_ability, i));
-            if (m != null && m.attribute != null) {
-                this.inv_attAddPoint[i] = (short)(this.inv_attAddPoint[i]
-                        + arrayValue(m.attribute, i) * arrayValue(this.inv_percen, i) / 100);
-            }
+            short[] var10000 = this.inv_attAddPoint;
+            var10000[i] = (short) (var10000[i] + this.inv_ability[i]);
+            var10000 = this.inv_attAddPoint;
+            var10000[i] = (short) (var10000[i] + m.attribute[i] * this.inv_percen[i] / 100);
         }
+
     }
 
     public void removeAbility() {
@@ -135,32 +132,44 @@ public class Equip {
     }
 
     public void addAbilityFromEquip(Equip e) {
-        if (e == null) {
-            return;
-        }
         for (int i = 0; i < 5; ++i) {
-            this.inv_ability[i] = (byte)arrayValue(e.inv_ability, i);
-            this.inv_attAddPoint[i] = (short)arrayValue(e.inv_attAddPoint, i);
-            this.inv_percen[i] = (byte)arrayValue(e.inv_percen, i);
+            this.inv_ability[i] = e.inv_ability[i];
+            this.inv_attAddPoint[i] = e.inv_attAddPoint[i];
+            this.inv_percen[i] = e.inv_percen[i];
         }
+
     }
 
     public void getInvAtribute(byte[] ability) {
-        if (ability == null) {
-            return;
-        }
         PlayerInfo m = TerrainMidlet.myInfo;
-        int pairCount = Math.min(5, (ability.length + 1) / 2);
-        for (int a = 0; a < pairCount; ++a) {
-            int abilityIndex = a * 2;
-            int percentIndex = abilityIndex + 1;
-            int flat = abilityIndex < ability.length ? ability[abilityIndex] : 0;
-            int percent = percentIndex < ability.length ? ability[percentIndex] : 0;
-            this.inv_ability[a] = (byte)flat;
-            this.inv_percen[a] = (byte)percent;
-            int base = m == null || m.attribute == null ? 0 : arrayValue(m.attribute, a);
-            this.inv_attAddPoint[a] = (short)(flat + base * percent / 100);
+        int a = 0;
+        int b = 0;
+        int c = 0;
+
+        int i;
+        for (i = 0; i < ability.length; ++i) {
+            this.inv_attAddPoint[a] = 0;
+            short[] var10000;
+            if (i % 2 == 0) {
+                var10000 = this.inv_attAddPoint;
+                var10000[a] = (short) (var10000[a] + ability[i]);
+            } else {
+                var10000 = this.inv_attAddPoint;
+                var10000[a] = (short) (var10000[a] + m.attribute[a] * ability[i] / 100);
+                ++a;
+            }
         }
+
+        for (i = 0; i < ability.length; ++i) {
+            if (i % 2 == 0) {
+                this.inv_ability[b] = ability[i];
+                ++b;
+            } else {
+                this.inv_percen[c] = ability[i];
+                ++c;
+            }
+        }
+
     }
 
     public boolean isSameEquip(Equip e) {
@@ -168,34 +177,35 @@ public class Equip {
     }
 
     public void getShopAtribute(byte[] ability) {
-        if (ability == null) {
-            return;
+        int b = 0;
+        int c = 0;
+
+        for (int i = 0; i < ability.length; ++i) {
+            if (i % 2 == 0) {
+                this.shop_ability[b] = ability[i];
+                ++b;
+            } else {
+                this.shop_percen[c] = ability[i];
+                ++c;
+            }
         }
-        int pairCount = Math.min(5, (ability.length + 1) / 2);
-        for (int a = 0; a < pairCount; ++a) {
-            int abilityIndex = a * 2;
-            int percentIndex = abilityIndex + 1;
-            this.shop_ability[a] = abilityIndex < ability.length ? ability[abilityIndex] : 0;
-            this.shop_percen[a] = percentIndex < ability.length ? ability[percentIndex] : 0;
-        }
+
     }
 
     public void changeToEquip(Equip e) {
-        if (e == null) {
-            return;
-        }
         this.icon = e.icon;
         this.glass = e.glass;
         this.type = e.type;
         this.id = e.id;
         this.date = e.date;
-        int l = minFrameCount(e);
+        int l = e.x.length;
         this.x = new short[l];
         this.y = new short[l];
         this.w = new byte[l];
         this.h = new byte[l];
         this.dx = new byte[l];
         this.dy = new byte[l];
+
         for (int i = 0; i < l; ++i) {
             this.x[i] = e.x[i];
             this.y[i] = e.y[i];
@@ -204,21 +214,15 @@ public class Equip {
             this.w[i] = e.w[i];
             this.h[i] = e.h[i];
         }
+
         this.bullet = e.bullet;
-        this.frame = (byte)l;
+        this.frame = e.frame;
         this.addAbilityFromEquip(e);
         this.dbKey = e.dbKey;
         this.level = e.level;
-        this.level2 = e.level2;
-        this.name = e.name;
-        this.slot = e.slot;
-        this.vip = e.vip;
-        this.xu = e.xu;
-        this.luong = e.luong;
     }
 
     public String getStrInvDetail() {
-        ensureAttributeArrays();
         String attribute = "";
         if (this.inv_ability[0] != 0) {
             attribute = attribute + Language.sinhluc() + " +" + this.inv_ability[0] + ".";
@@ -275,7 +279,6 @@ public class Equip {
     }
 
     public String getStrShopDetail() {
-        ensureAttributeArrays();
         String attribute = "";
         this.shopDetailNunmLines = 0;
         this.shopDetailNunStrs = new Vector();
@@ -336,130 +339,87 @@ public class Equip {
         if (this.shop_percen[4] != 0) {
             ++this.shopDetailNunmLines;
             attribute = attribute + " " + Language.dongdoi() + " +" + this.shop_percen[4] + "%";
-            this.shopDetailNunStrs.addElement(" " + Language.dongdoi() + " +" + this.shop_percen[4] + "% ");
+            this.shopDetailNunStrs.addElement(Language.sucmanh() + " +" + this.shop_ability[1] + " ");
         }
 
         return attribute;
     }
 
     public void drawImage(mGraphics g, int Look, int Frame, int X, int Y) {
-        if (this.notPaint || g == null || Frame < 0) {
-            return;
-        }
-        int glassIndex = this.glass & 255;
-        if (glassIndex >= PlayerEquip.imgData.length || PlayerEquip.imgData[glassIndex] == null
-                || PlayerEquip.imgData[glassIndex].image == null || !hasFrame(Frame)) {
-            return;
-        }
-        int srcW = this.w[Frame] & 255;
-        int srcH = this.h[Frame] & 255;
-        if (srcW <= 0 || srcH <= 0) {
-            return;
-        }
-        int imageW = PlayerEquip.imgData[glassIndex].image.getWidth();
-        int imageH = PlayerEquip.imgData[glassIndex].image.getHeight();
-        if (this.x[Frame] < 0 || this.y[Frame] < 0 || this.x[Frame] + srcW > imageW || this.y[Frame] + srcH > imageH) {
-            return;
-        }
+        if (!this.notPaint) {
+            int glassIndex = this.glass & 255;
+            if (glassIndex >= PlayerEquip.imgData.length || PlayerEquip.imgData[glassIndex] == null ||
+                    PlayerEquip.imgData[glassIndex].image == null || this.x == null || this.y == null ||
+                    this.w == null || this.h == null || this.dx == null || this.dy == null ||
+                    Frame < 0 || Frame >= this.x.length || Frame >= this.y.length ||
+                    Frame >= this.w.length || Frame >= this.h.length || Frame >= this.dx.length || Frame >= this.dy.length) {
+                return;
+            }
+            int W = 0;
+            int H = 0;
+            if (this.glass == 0 || this.glass == 1 || this.glass == 2 || this.glass == 4 || this.glass == 5 || this.glass == 8 || this.glass == 9) {
+                W = 24;
+                H = 24;
+            }
 
-        int W = 0;
-        int H = 0;
-        if (glassIndex == 0 || glassIndex == 1 || glassIndex == 2 || glassIndex == 4 || glassIndex == 5 || glassIndex == 8 || glassIndex == 9) {
-            W = 24;
-            H = 24;
-        } else if (glassIndex == 3) {
-            W = 30;
-            H = 32;
-        } else if (glassIndex == 6) {
-            W = 29;
-            H = 24;
-        } else if (glassIndex == 7) {
-            W = 32;
-            H = 32;
-        }
+            if (this.glass == 3) {
+                W = 30;
+                H = 32;
+            }
 
-        if (Look == 0) {
-            g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], srcW, srcH, Look,
-                    X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
-        } else if (Look == 2) {
-            g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], srcW, srcH, Look,
-                    X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40,
-                    mGraphics.TOP | mGraphics.RIGHT, false);
+            if (this.glass == 6) {
+                W = 29;
+                H = 24;
+            }
+
+            if (this.glass == 7) {
+                W = 32;
+                H = 32;
+            }
+
+            if (Frame < 6) {
+                if (Look == 0) {
+                    g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
+                    Font.smallFont.drawString(g, " ", X - W / 2 + this.dx[Frame] + 18, Y - H + this.dy[Frame] + 40, 0, false);
+                }
+
+                if (Look == 2) {
+                    g.drawRegion(PlayerEquip.imgData[glassIndex], this.x[Frame], this.y[Frame], this.w[Frame], this.h[Frame], Look, X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40, mGraphics.TOP | mGraphics.RIGHT, false);
+                    Font.smallFont.drawString(g, "  ", X + W / 2 - (this.dx[Frame] + 18), Y - H + this.dy[Frame] + 40, 0, false);
+                }
+            }
+
         }
     }
 
     public void drawIcon(mGraphics g, int X, int Y, boolean isClip) {
-        if (g == null) {
-            return;
-        }
         if (!this.isMaterial) {
-            int iconValue = this.icon;
-            if (iconValue >= 0) {
-                int offset = iconValue * 16;
-                int index = offset / 1024;
-                offset %= 1024;
-                if (EquipScreen.imgIconEQ != null && index >= 0 && index < EquipScreen.imgIconEQ.length) {
-                    mImage sheet = EquipScreen.imgIconEQ[index];
-                    if (sheet != null && sheet.image != null && sheet.image.getWidth() >= 16
-                            && offset >= 0 && offset + 16 <= sheet.image.getHeight()) {
-                        g.drawRegion(sheet, 0, offset, 16, 16, 0, X, Y, 0, isClip);
-                    }
-                }
+            int offset = this.icon * 16;
+
+            int index;
+            for (index = 0; offset >= 1024; offset -= 1024) {
+                ++index;
             }
+
+            g.drawRegion(EquipScreen.imgIconEQ[index], 0, offset, 16, 16, 0, X, Y, 0, isClip);
         } else {
-            if (this.materialIcon != null && this.materialIcon.image != null) {
+            if (this.materialIcon != null) {
                 g.drawImage(this.materialIcon, X + 8, Y + 8, 3, isClip);
             }
+
             if (this.num > 1) {
                 Font.smallFontYellow.drawString(g, String.valueOf(this.num), X + 11, Y + 11, 0);
             }
+
             if (this.numSelected > 1 && !this.isSelect || this.numSelected >= 1 && this.isSelect) {
                 Font.smallFontRed.drawString(g, String.valueOf(this.numSelected), X + 11, Y, 0);
             }
         }
+
         if (this.isSelect) {
             g.setColor(0);
             g.drawRect(X, Y, 16, 16, true);
         }
-    }
 
-    private boolean hasFrame(int frameIndex) {
-        return this.x != null && this.y != null && this.w != null && this.h != null && this.dx != null && this.dy != null
-                && frameIndex < this.x.length && frameIndex < this.y.length && frameIndex < this.w.length
-                && frameIndex < this.h.length && frameIndex < this.dx.length && frameIndex < this.dy.length;
-    }
-
-    private static int minFrameCount(Equip e) {
-        if (e == null || e.x == null || e.y == null || e.w == null || e.h == null || e.dx == null || e.dy == null) {
-            return 0;
-        }
-        int length = e.x.length;
-        length = Math.min(length, e.y.length);
-        length = Math.min(length, e.w.length);
-        length = Math.min(length, e.h.length);
-        length = Math.min(length, e.dx.length);
-        length = Math.min(length, e.dy.length);
-        return Math.max(0, length);
-    }
-
-    private void ensureAttributeArrays() {
-        if (this.inv_attAddPoint == null || this.inv_attAddPoint.length < 5) this.inv_attAddPoint = new short[5];
-        if (this.inv_ability == null || this.inv_ability.length < 5) this.inv_ability = new byte[5];
-        if (this.inv_percen == null || this.inv_percen.length < 5) this.inv_percen = new byte[5];
-        if (this.shop_attAddPoint == null || this.shop_attAddPoint.length < 5) this.shop_attAddPoint = new short[5];
-        if (this.shop_ability == null || this.shop_ability.length < 5) this.shop_ability = new byte[5];
-        if (this.shop_percen == null || this.shop_percen.length < 5) this.shop_percen = new byte[5];
-    }
-
-    private static int arrayValue(byte[] values, int index) {
-        return values != null && index >= 0 && index < values.length ? values[index] : 0;
-    }
-
-    private static int arrayValue(short[] values, int index) {
-        return values != null && index >= 0 && index < values.length ? values[index] : 0;
-    }
-
-    private static int arrayValue(int[] values, int index) {
-        return values != null && index >= 0 && index < values.length ? values[index] : 0;
     }
 }

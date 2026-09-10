@@ -57,11 +57,9 @@ public class RoomListScr extends CScreen {
       imgCurPos = GameScr.imgCurPos;
       imgSmallCloud = GameScr.imgSmallCloud;
       imgArrowRed = GameScr.imgArrowRed;
-      // Map metadata arrives after icondata2 on fresh login. Never size static
-      // state from MM.NUM_MAP here; init() rebuilds it once metadata is ready.
-      nMap = 0;
+      nMap = MM.NUM_MAP;
       curMapIndex = 0;
-      _iconX = new int[0];
+      _iconX = new int[MM.NUM_MAP];
       rangeSplit = 100;
       imgMapIW = 80;
       imgMapIH = 50;
@@ -84,13 +82,9 @@ public class RoomListScr extends CScreen {
 
    public void init() {
       this.nameCScreen = " RoomListScr screen!";
-      int bossMapCount = PrepareScr.mapBossID == null ? 0 : PrepareScr.mapBossID.length;
-      this.NUMB = !this.isBoss ? (MM.NUM_MAP & 255) - bossMapCount : bossMapCount;
-      nMap = Math.max(0, this.NUMB);
-      if (_iconX == null || _iconX.length < nMap) {
-         _iconX = new int[nMap];
-      }
-      this.nBoardPerLine = Math.max(1, CCanvas.width / 90);
+      this.NUMB = !this.isBoss ? MM.NUM_MAP - PrepareScr.mapBossID.length : PrepareScr.mapBossID.length;
+      nMap = this.NUMB;
+      this.nBoardPerLine = CCanvas.width / 90;
       this.defX = (CCanvas.width - this.nBoardPerLine * 90 >> 1) + 40;
 
       int y;
@@ -99,8 +93,8 @@ public class RoomListScr extends CScreen {
       }
 
       _centerIX = w >> 1;
-      curMapIndex = nMap > 0 ? nMap / 2 : 0;
-      this.dis = nMap > 0 ? (_centerIX - _iconX[curMapIndex]) / 2 : 0;
+      curMapIndex = nMap / 2;
+      this.dis = (_centerIX - _iconX[curMapIndex]) / 2;
       isMoveMenu = true;
       if (cloudX == null) {
          cloudType = new int[]{0, 1, 1};
@@ -140,8 +134,7 @@ public class RoomListScr extends CScreen {
 
    protected void doSelect() {
       CCanvas.startWaitDlg(Language.starting());
-      int bossMapCount = PrepareScr.mapBossID == null ? 0 : PrepareScr.mapBossID.length;
-      int tem = this.isBoss ? (MM.NUM_MAP & 255) - bossMapCount : 0;
+      int tem = this.isBoss ? MM.NUM_MAP - PrepareScr.mapBossID.length : 0;
       if (curMapIndex < this.NUMB) {
          byte id = (byte)(curMapIndex + tem);
          if (id != -1) {
@@ -162,8 +155,7 @@ public class RoomListScr extends CScreen {
 
    private void paintRoomList(mGraphics g) {
       g.translate(0, -this.cmy);
-      int bossMapCount = PrepareScr.mapBossID == null ? 0 : PrepareScr.mapBossID.length;
-      int tem = this.isBoss ? (MM.NUM_MAP & 255) - bossMapCount : 0;
+      int tem = this.isBoss ? MM.NUM_MAP - PrepareScr.mapBossID.length : 0;
 
       for(int i = 0; i < this.NUMB; ++i) {
          int xP = i % this.nBoardPerLine;
@@ -190,21 +182,10 @@ public class RoomListScr extends CScreen {
       g.translate(-g.getTranslateX(), -g.getTranslateY());
       g.setColor(1133755);
       g.fillRect(0, 0, CCanvas.width, 20, false);
-      int nameIndex = curMapIndex + tem;
-      String mapTitle = "Map " + (nameIndex + 1);
-      if (MM.mapName != null && nameIndex >= 0 && nameIndex < MM.mapName.length
-            && MM.mapName[nameIndex] != null && !MM.mapName[nameIndex].trim().isEmpty()) {
-         mapTitle = MM.mapName[nameIndex];
-      }
-      Font.borderFont.drawString(g, (nameIndex + 1) + ". " + mapTitle, w >> 1, 2, 2);
+      Font.borderFont.drawString(g, curMapIndex + 1 + ". " + MM.mapName[curMapIndex + tem], w >> 1, 2, 2);
    }
 
    public void setCamY() {
-      if (nMap <= 0) {
-         this.cmtoY = 0;
-         this.cmy = 0;
-         return;
-      }
       int yP = curMapIndex / this.nBoardPerLine;
       int Y = yP * 57 + 60 - (CCanvas.hieght / 2 - cmdH);
       this.cmtoY = Y;

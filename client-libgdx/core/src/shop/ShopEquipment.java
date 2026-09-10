@@ -108,52 +108,23 @@ public class ShopEquipment extends TabScreen {
       this.itemCamera();
    }
 
-   private boolean hasSelection() {
-      return this.myShop != null && this.select >= 0 && this.select < this.myShop.size()
-              && this.myShop.elementAt(this.select) instanceof Equip;
-   }
-
-   private void clearSelectionDetail() {
-      this.select = 0;
-      this.eSelect = null;
-      this.equipDetail = "";
-      this.equipName = "Không có trang bị";
-      this.price = "";
-      this.expandDetail = false;
-      this.left = null;
-      this.cmyIDLim = 0;
-   }
-
    public void getCommand() {
-      if (!this.hasSelection()) {
-         this.left = null;
-         return;
-      }
-      this.eSelect = (Equip)this.myShop.elementAt(this.select);
       final Command xu = new Command(Language.muaXu(), new IAction() {
          public void perform() {
-            final Equip selected = ShopEquipment.this.getCurrEq();
-            if (selected == null || selected.xu == -1) {
-               return;
-            }
-            CCanvas.startYesNoDlg(Language.bancochac() + selected.xu + Language.xu(), new IAction() {
+            CCanvas.startYesNoDlg(Language.bancochac() + ShopEquipment.this.eSelect.xu + Language.xu(), new IAction() {
                public void perform() {
                   CCanvas.startOKDlg(Language.pleaseWait());
-                  GameService.gI().buy_sell_Equip((byte)0, (int[])null, (short)selected.index, (byte)0);
+                  GameService.gI().buy_sell_Equip((byte)0, (int[])null, (short)ShopEquipment.this.getCurrEq().index, (byte)0);
                }
             });
          }
       });
       final Command luong = new Command(Language.muaLuong(), new IAction() {
          public void perform() {
-            final Equip selected = ShopEquipment.this.getCurrEq();
-            if (selected == null || selected.luong == -1) {
-               return;
-            }
-            CCanvas.startYesNoDlg(Language.bancochac() + selected.luong + Language.luong(), new IAction() {
+            CCanvas.startYesNoDlg(Language.bancochac() + ShopEquipment.this.eSelect.luong + Language.luong(), new IAction() {
                public void perform() {
                   CCanvas.startOKDlg(Language.pleaseWait());
-                  GameService.gI().buy_sell_Equip((byte)0, (int[])null, (short)selected.index, (byte)1);
+                  GameService.gI().buy_sell_Equip((byte)0, (int[])null, (short)ShopEquipment.this.getCurrEq().index, (byte)1);
                }
             });
          }
@@ -161,29 +132,22 @@ public class ShopEquipment extends TabScreen {
       Command menuLeft = new Command("Menu", new IAction() {
          public void perform() {
             Vector menu = new Vector();
-            Equip selected = ShopEquipment.this.getCurrEq();
-            if (selected == null) {
-               return;
-            }
-            if (selected.xu != -1) {
-               menu.addElement(xu);
-            }
-            if (selected.luong != -1) {
-               menu.addElement(luong);
-            }
-            if (!menu.isEmpty()) {
-               CCanvas.menu.startAt(menu, 0);
-            }
+            menu.addElement(xu);
+            menu.addElement(luong);
+            CCanvas.menu.startAt(menu, 0);
          }
       });
-      if (this.eSelect.luong != -1 && this.eSelect.xu != -1) {
-         this.left = menuLeft;
-      } else if (this.eSelect.xu == -1 && this.eSelect.luong != -1) {
-         this.left = luong;
-      } else if (this.eSelect.xu != -1) {
+      if (this.eSelect == null) {
          this.left = xu;
       } else {
-         this.left = null;
+         if (this.eSelect.luong != -1 && this.eSelect.xu != -1) {
+            this.left = menuLeft;
+         } else if (this.eSelect.xu == -1 && this.eSelect.luong != -1) {
+            this.left = luong;
+         } else {
+            this.left = xu;
+         }
+
       }
    }
 
@@ -225,21 +189,15 @@ public class ShopEquipment extends TabScreen {
    }
 
    public Equip getCurrEq() {
-      return this.hasSelection() ? (Equip)this.myShop.elementAt(this.select) : null;
+      Equip e = (Equip)this.myShop.elementAt(this.select);
+      return e;
    }
 
    public void getMyShop() {
       this.myShop.removeAllElements();
 
-      if (this.items == null || TerrainMidlet.myInfo == null) {
-         return;
-      }
       for(int i = 0; i < this.items.size(); ++i) {
-         Object raw = this.items.elementAt(i);
-         if (!(raw instanceof Equip)) {
-            continue;
-         }
-         Equip e = (Equip)raw;
+         Equip e = (Equip)this.items.elementAt(i);
          if (e.glass == TerrainMidlet.myInfo.gun) {
             this.myShop.addElement(e);
          }
@@ -249,20 +207,24 @@ public class ShopEquipment extends TabScreen {
 
    public void setItems(Vector item) {
       this.select = 0;
-      this.items = item == null ? new Vector() : item;
+      this.items.removeAllElements();
+      this.items = item;
       this.getMyShop();
       this.size = this.myShop.size();
-      this.hLine = this.size / this.nLine;
-      if (this.size % this.nLine != 0) {
+      this.hLine = this.myShop.size() / this.nLine;
+      if (this.myShop.size() % this.nLine != 0) {
          ++this.hLine;
       }
-      this.cmyILim = Math.max(0, this.hLine * this.wTab - 70);
-      if (!this.hasSelection()) {
-         this.clearSelectionDetail();
-         return;
-      }
+
       this.eSelect = (Equip)this.myShop.elementAt(this.select);
-      this.getDetail();
+      this.equipDetail = this.eSelect.getStrShopDetail();
+      this.equipName = this.eSelect.name;
+      this.price = "Giờ: " + this.eSelect.xu + Language.xu() + " (" + this.eSelect.date + "ngày " + ")";
+      this.cmyILim = this.hLine * this.wTab - 70;
+      if (this.eSelect != null && this.eSelect.shopDetailNunStrs != null) {
+         this.cmyIDLim = this.eSelect.shopDetailNunStrs.size() * this.wTab;
+      }
+
    }
 
    private void paintEquip(mGraphics g, int X, int Y, Vector it, int select) {
@@ -275,17 +237,8 @@ public class ShopEquipment extends TabScreen {
       g.translate(0, -this.cmyI);
       g.setColor(16767817);
 
-      if (it == null) {
-         g.setClip(0, 0, 1000, 1000);
-         g.translate(0, -g.getTranslateY());
-         return;
-      }
       for(int i = 0; i < it.size(); ++i) {
-         Object raw = it.elementAt(i);
-         if (!(raw instanceof Equip)) {
-            continue;
-         }
-         Equip e = (Equip)raw;
+         Equip e = (Equip)it.elementAt(i);
          int xIcon = X + a * this.wTab + this.wXp;
          int yIcon = Y + b * this.wTab + this.wYp;
          if (i == select) {
@@ -315,13 +268,8 @@ public class ShopEquipment extends TabScreen {
 
    public void paintDetail(mGraphics g, int X, int Y) {
       PlayerInfo m = TerrainMidlet.myInfo;
-      String myMoney = Language.money() + ": "
-              + (m == null ? "0" : String.valueOf(m.xu)) + Language.xu() + " - "
-              + (m == null ? "0" : String.valueOf(m.luong)) + Language.luong();
+      String myMoney = Language.money() + ": " + m.xu + Language.xu() + " - " + m.luong + Language.luong();
 
-      if (this.equipDetail == null) this.equipDetail = "";
-      if (this.equipName == null) this.equipName = "";
-      if (this.price == null) this.price = "";
       int bb = Font.normalFont.getWidth(this.equipDetail);
       int ee = Font.normalFont.getWidth(this.price);
       int cc = this.transText1.x;
@@ -333,7 +281,7 @@ public class ShopEquipment extends TabScreen {
       g.fillRoundRect(X, Y + 54, 170, 16, 6, 6, false);
       Font.normalGFont.drawString(g, this.equipName, X + 6, Y + 15, 0);
       Font.normalYFont.drawString(g, this.price, X + 6 + dd, Y + 35, 0);
-      if (this.eSelect != null && this.eSelect.shopDetailNunStrs != null && !this.eSelect.shopDetailNunStrs.isEmpty()) {
+      if (this.eSelect != null || this.eSelect.shopDetailNunStrs != null) {
          this.xExpand = X + 6 + cc + 100 + 50;
          this.yExpand = Y + 55;
          if (this.expandDetail) {
@@ -364,40 +312,66 @@ public class ShopEquipment extends TabScreen {
    }
 
    public void getDetail() {
-      if (!this.hasSelection()) {
-         this.clearSelectionDetail();
-         return;
-      }
-      this.eSelect = (Equip)this.myShop.elementAt(this.select);
-      try {
+      if (this.select < this.size) {
+         this.eSelect = (Equip)this.myShop.elementAt(this.select);
          this.equipDetail = this.eSelect.getStrShopDetail();
-      } catch (RuntimeException detailError) {
-         CRes.out("[SHOP-EQUIP] Bad detail for glass=" + this.eSelect.glass
-                 + " type=" + this.eSelect.type + " id=" + this.eSelect.id + ": " + detailError);
-         this.equipDetail = "";
-         this.eSelect.shopDetailNunStrs = new Vector();
-         this.eSelect.shopDetailNunmLines = 0;
+         String glass = null;
+         if (this.eSelect.glass == 0) {
+            glass = "Gunner";
+         }
+
+         if (this.eSelect.glass == 1) {
+            glass = "Miss 6";
+         }
+
+         if (this.eSelect.glass == 2) {
+            glass = "Electician";
+         }
+
+         if (this.eSelect.glass == 3) {
+            glass = "KingKong";
+         }
+
+         if (this.eSelect.glass == 4) {
+            glass = "Rocketer";
+         }
+
+         if (this.eSelect.glass == 5) {
+            glass = "Granos";
+         }
+
+         if (this.eSelect.glass == 6) {
+            glass = "Chicken";
+         }
+
+         if (this.eSelect.glass == 7) {
+            glass = "Tarzan";
+         }
+
+         if (this.eSelect.glass == 8) {
+            glass = "Apache";
+         }
+
+         if (this.eSelect.glass == 9) {
+            glass = "Magenta";
+         }
+
+         this.equipName = this.eSelect.name + " (lvl " + this.eSelect.level + ")";
+         String luong = (this.eSelect.xu != -1 ? "-" : "") + this.eSelect.luong + Language.luong();
+         if (this.eSelect.luong == -1) {
+            luong = "";
+         }
+
+         String xu = this.eSelect.xu + Language.xu();
+         if (this.eSelect.xu == -1) {
+            xu = "";
+         }
+
+         String ngay = this.eSelect.date >= 0 ? " (" + this.eSelect.date + Language.ngay() + ")" : "";
+         this.price = Language.price() + ": " + xu + luong + ngay;
+         this.getCommand();
+         this.transText1.x = 0;
       }
-      if (this.equipDetail == null) {
-         this.equipDetail = "";
-      }
-      String safeName = this.eSelect.name == null || this.eSelect.name.trim().isEmpty()
-              ? "Trang bị #" + this.eSelect.id : this.eSelect.name;
-      this.equipName = safeName + " (lvl " + this.eSelect.level + ")";
-      String luong = (this.eSelect.xu != -1 ? "-" : "") + this.eSelect.luong + Language.luong();
-      if (this.eSelect.luong == -1) {
-         luong = "";
-      }
-      String xu = this.eSelect.xu + Language.xu();
-      if (this.eSelect.xu == -1) {
-         xu = "";
-      }
-      String ngay = this.eSelect.date >= 0 ? " (" + this.eSelect.date + Language.ngay() + ")" : "";
-      this.price = Language.price() + ": " + xu + luong + ngay;
-      this.cmyIDLim = this.eSelect.shopDetailNunStrs == null
-              ? 0 : Math.max(0, this.eSelect.shopDetailNunStrs.size() * ITEM_HEIGHT - 32);
-      this.getCommand();
-      this.transText1.x = 0;
    }
 
    public void onPointerPressed(int x, int y2, int index) {

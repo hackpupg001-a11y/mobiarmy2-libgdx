@@ -572,11 +572,9 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                     MM.NUM_MAP = len6;
                     MM.mapName = new String[len6];
                     MM.mapFileName = new String[len6];
-                    if (MM.mapFiles == null) {
-                        MM.mapFiles = new Vector();
-                    } else {
-                        MM.mapFiles.removeAllElements();
-                    }
+                    // This packet is a full replacement. Keeping old entries makes
+                    // createBackGround() pick stale metadata after a resource refresh.
+                    MM.mapFiles.removeAllElements();
 
                     for (i = 0; i < len6; ++i) {
                         byte fileID = msg.reader().readByte();
@@ -585,40 +583,27 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                         msg.reader().read(fData, 0, maxDame);
                         short[] values = new short[5];
 
-                        // Do not reuse the outer map index here.  The old desktop
-                        // port assigned i=0..4 in this inner loop, leaving i==5
-                        // afterwards and corrupting mapName/mapFileName indexes.
-                        for (int j = 0; j < 5; ++j) {
-                            values[j] = msg.reader().readShort();
+                        // Keep the map loop index intact. V10 uses a separate counter here;
+                        // reusing i corrupts the map index and can leave map data half-loaded.
+                        for (int valueIndex = 0; valueIndex < 5; ++valueIndex) {
+                            values[valueIndex] = msg.reader().readShort();
                         }
 
-                        String parsedMapName = msg.reader().readUTF();
-                        String parsedMapFileName = msg.reader().readUTF();
-                        MM.mapName[i] = parsedMapName == null || parsedMapName.trim().isEmpty()
-                                ? "Map " + (i + 1) : parsedMapName;
-                        MM.mapFileName[i] = parsedMapFileName == null || parsedMapFileName.trim().isEmpty()
-                                ? "map" + i : parsedMapFileName;
+                        MM.mapName[i] = msg.reader().readUTF();
+                        MM.mapFileName[i] = msg.reader().readUTF();
                         MapFile mf = new MapFile(fData, fileID, values);
                         MM.mapFiles.addElement(mf);
                         Object var31 = null;
                     }
 
                     CRes.out("=============================> MM.mapFileName  " + len6);
-                    // Fresh Hybrid login sends icondata2 before valuesdata2.
-                    // Rebuild map previews now that NUM_MAP and file names are
-                    // finally known; otherwise init() previously created a
-                    // zero-length preview array and the room map UI stayed blank.
-                    if (PrepareScr.fileData != null) {
-                        PrepareScr.init();
-                    }
                 } catch (Exception var23) {
-                    CRes.out("[MAP-DATA] Failed to parse map metadata: " + var23);
+                    CRes.err("Failed to parse map data: " + var23);
+                    var23.printStackTrace();
                 }
                 break;
             case 1:
                 CRes.out("=============================> read Trang bi  type = 1 ");
-                PlayerEquip.playerData = new Vector();
-
                 try {
                     Vector<EquipGlass> vGlass = new Vector();
                     byte nglass = msg.reader().readByte();
@@ -676,6 +661,7 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                                     aibity[b] = msg.reader().readByte();
                                 }
 
+                                e.setInvAtribute();
                                 e.getInvAtribute(aibity);
                                 e.getShopAtribute(aibity);
                                 vEquip.addElement(e);
@@ -689,67 +675,77 @@ public class CCanvas extends MotherCanvas implements IActionListener {
                         vGlass.addElement(eqGlass);
                     }
 
+                    // Publish only after the complete equipment definition table was parsed.
                     PlayerEquip.addGlassEquip(vGlass);
+                    if (TerrainMidlet.myInfo != null) {
+                        TerrainMidlet.myInfo.getMyEquip(10);
+                        if (TerrainMidlet.myInfo.isVip) {
+                            TerrainMidlet.myInfo.getVipEquip();
+                        }
+                    }
                     short lenIcon = msg.reader().readShort();
                     byte[] iconImg = new byte[lenIcon];
                     msg.reader().read(iconImg, 0, lenIcon);
+                    // V10 keeps this sprite sheet from the packet. Do the same instead of
+                    // silently discarding it; decoding is posted to the LibGDX render thread.
+                    if (lenIcon > 0) {
+                        mImage.createImage(iconImg, 0, lenIcon, new IAction2() {
+                            public void perform(Object object) {
+                                EquipScreen.imgIcon = new mImage((Image) object);
+                            }
+                        });
+                    }
                     CRes.out("2 =============================> read Trang bi  type = 1 ");
                     mImage.createImage("/equip/01.png", new IAction2() {
                         public void perform(Object object) {
-                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 0 && object instanceof Image) {
-                                EquipScreen.imgIconEQ[0] = new mImage((Image) object);
-                            }
+                            EquipScreen.imgIconEQ[0] = new mImage((Image) object);
                         }
                     });
                     mImage.createImage("/equip/02.png", new IAction2() {
                         public void perform(Object object) {
-                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 1 && object instanceof Image) {
-                                EquipScreen.imgIconEQ[1] = new mImage((Image) object);
-                            }
+                            EquipScreen.imgIconEQ[1] = new mImage((Image) object);
                         }
                     });
                     mImage.createImage("/equip/03.png", new IAction2() {
                         public void perform(Object object) {
-                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 2 && object instanceof Image) {
-                                EquipScreen.imgIconEQ[2] = new mImage((Image) object);
-                            }
+                            EquipScreen.imgIconEQ[2] = new mImage((Image) object);
                         }
                     });
                     mImage.createImage("/equip/04.png", new IAction2() {
                         public void perform(Object object) {
-                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 3 && object instanceof Image) {
-                                EquipScreen.imgIconEQ[3] = new mImage((Image) object);
-                            }
+                            EquipScreen.imgIconEQ[3] = new mImage((Image) object);
                         }
                     });
                     mImage.createImage("/equip/05.png", new IAction2() {
                         public void perform(Object object) {
-                            if (EquipScreen.imgIconEQ != null && EquipScreen.imgIconEQ.length > 4 && object instanceof Image) {
-                                EquipScreen.imgIconEQ[4] = new mImage((Image) object);
-                            }
+                            EquipScreen.imgIconEQ[4] = new mImage((Image) object);
                         }
                     });
                     CRes.out("3 =============================> read Trang bi  type = 1 ");
-                    byte[] bullets = null;
-                    indexBullet = 0;
-
+                    // V10 assigns each bullet image to the same packet index. LibGDX decodes
+                    // asynchronously, so using one shared incrementing callback index races and
+                    // can associate the wrong image with a bullet. Capture the packet index.
+                    CCanvas.indexBullet = 0;
                     for (int c = 0; c < 10; ++c) {
                         short lentBullet = msg.reader().readShort();
-                        bullets = new byte[lentBullet];
-                        msg.reader().read(bullets, 0, lentBullet);
-                        mImage.createImage((byte[]) bullets, 0, lentBullet, (IAction2) (new IAction2() {
-                            public void perform(Object object) {
-                                try {
-                                    PlayerEquip.bullets[CCanvas.indexBullet] = new mImage((Image) object);
-                                    CCanvas.indexBullet = CCanvas.indexBullet + 1;
-                                } catch (Exception var3) {
+                        final byte[] bulletData = new byte[lentBullet];
+                        msg.reader().read(bulletData, 0, lentBullet);
+                        final int bulletIndex = c;
+                        if (lentBullet > 0) {
+                            mImage.createImage(bulletData, 0, lentBullet, new IAction2() {
+                                public void perform(Object object) {
+                                    try {
+                                        PlayerEquip.bullets[bulletIndex] = new mImage((Image) object);
+                                    } catch (Exception ex) {
+                                        CRes.err("Failed to decode bullet image " + bulletIndex + ": " + ex);
+                                    }
                                 }
-
-                            }
-                        }));
+                            });
+                        } else {
+                            PlayerEquip.bullets[bulletIndex] = null;
+                        }
                     }
-
-                    bullets = null;
+                    CCanvas.indexBullet = 10;
                     CRes.out("===================> create PlayerEquip.playerData to set myEquip!");
                     CRes.out("__ =============================> read Trang bi  type = 1 have PlayerEquip.playerData " + (PlayerEquip.playerData != null));
                     CRes.out("4 =============================> read Trang bi  type = 1 !!!!! DONE!!!!");

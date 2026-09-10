@@ -1,7 +1,6 @@
 package screen;
 
 import CLib.mGraphics;
-import CLib.LibSysTem;
 import CLib.mImage;
 import Equipment.PlayerEquip;
 import coreLG.CCanvas;
@@ -13,9 +12,6 @@ import item.Item;
 import item.MyItemIcon;
 
 import java.util.Vector;
-
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.files.FileHandle;
 
 import map.MM;
 import model.CRes;
@@ -146,175 +142,30 @@ public class PrepareScr extends CScreen {
     }
 
     public static void init() {
-        int mapCount = MM.NUM_MAP & 255;
-        if (mapCount <= 0) {
-            // On a fresh login Hybrid 2.3 sends icondata2 before valuesdata2.
-            // Defer preview decoding until the map metadata packet establishes
-            // NUM_MAP/mapFileName; CCanvas.readMess(type 0) will call us again.
-            imgMap = new mImage[0];
-            CRes.out("[MAP-PREVIEW] deferred until valuesdata2/map metadata arrives");
-            return;
-        }
-        // RoomListScr has static arrays sized from MM.NUM_MAP. Creating it before
-        // valuesdata2 arrives permanently poisons those arrays at length 0 on a
-        // fresh login (icondata2 is delivered first by the Hybrid server).
         CCanvas.roomListScr = new RoomListScr();
-        imgMap = new mImage[mapCount];
+        imgMap = new mImage[MM.NUM_MAP];
 
         int i;
         try {
-            filePak = fileData == null ? null : new FilePack(fileData);
+            filePak = new FilePack(fileData);
             if (filePak != null) {
                 for (i = 0; i < MM.NUM_MAP; ++i) {
-                    String fileName = safeMapFileName(i);
-                    try {
-                        imgMap[i] = loadMapPreview(filePak, fileName, i);
-                        if (imgMap[i] == null) {
-                            CRes.out("[MAP-PREVIEW] filepack missing preview for " + fileName);
-                        }
-                    } catch (Exception imageError) {
-                        CRes.out("[MAP-PREVIEW] filepack failed " + fileName + ": " + imageError);
-                    }
+                    imgMap[i] = filePak.loadImage(MM.mapFileName[i] + ".png");
                 }
 
-                try {
-                    khungMap = filePak.loadImage("khungmap.png");
-                } catch (Exception ignored) {
-                    khungMap = null;
-                }
+                khungMap = filePak.loadImage("khungmap.png");
             }
         } catch (Exception var2) {
-            CRes.out("[MAP-PREVIEW] Could not open icon filepack: " + var2);
+            var2.printStackTrace();
         }
 
         filePak = null;
 
-        // Some old desktop snapshots did not ship /map/mapN.png at all.  The
-        // previous code unconditionally replaced the valid server/filepack
-        // preview with that missing resource, which made every preview blank.
-        // Only use the packaged image as a fallback when the dynamic image is
-        // genuinely unavailable.
-        for (i = 0; i < imgMap.length; ++i) {
-            if (imgMap[i] == null) {
-                // Image.createImage() already prefixes LibSysTem.res ("res").
-                // getClassPathConfig() returns /res/... on desktop, which used to
-                // become res/res/map/... and throw on LibGDX's render thread.
-                String imagePath = "/" + CONFIG.PATH_MAP + "map" + i + ".png";
-                try {
-                    FileHandle handle = Gdx.files.internal(LibSysTem.res + imagePath);
-                    if (handle != null && handle.exists()) {
-                        imgMap[i] = mImage.createImageAll(imagePath);
-                    }
-                } catch (RuntimeException resourceError) {
-                    CRes.out("[MAP-PREVIEW] packaged fallback unavailable " + imagePath + ": " + resourceError);
-                }
-                if (imgMap[i] == null && randomMap != null) {
-                    imgMap[i] = randomMap;
-                }
-            }
-            ensureMapName(i);
+        for (i = 0; i < MAPCOUNT - 1; ++i) {
+            String mapName = CCanvas.getClassPathConfig(CONFIG.PATH_MAP + "map" + i + ".png");
+            imgMap[i] = mImage.createImage(mapName);
         }
 
-    }
-
-    private static mImage loadMapPreview(FilePack pack, String rawName, int mapIndex) {
-        if (pack == null) {
-            return null;
-        }
-        String name = rawName == null ? "" : rawName.trim().replace('\\', '/');
-        if (name.startsWith("/")) {
-            name = name.substring(1);
-        }
-        String base = stripPng(baseName(name));
-        String[] candidates = new String[]{
-                name,
-                name.endsWith(".png") ? name : name + ".png",
-                base,
-                base + ".png",
-                "map/" + name,
-                "map/" + (name.endsWith(".png") ? name : name + ".png"),
-                "map/" + base + ".png",
-                "map" + mapIndex + ".png",
-                "map/map" + mapIndex + ".png"
-        };
-        for (String candidate : candidates) {
-            if (candidate == null || candidate.isEmpty()) {
-                continue;
-            }
-            mImage image = pack.loadImage(candidate);
-            if (image != null && image.image != null) {
-                return image;
-            }
-        }
-
-        // Old cache packs are not consistent about path/case/extensions.  Match
-        // by normalized basename before giving up, so a server name such as
-        // "map3" can still resolve a packed entry "Map/map3.PNG".
-        for (int i = 0; i < pack.lenght(); ++i) {
-            String packedName;
-            try {
-                packedName = pack.FileName(i);
-            } catch (RuntimeException ignored) {
-                continue;
-            }
-            if (packedName == null) {
-                continue;
-            }
-            String packedBase = stripPng(baseName(packedName.trim().replace('\\', '/')));
-            if ((!base.isEmpty() && packedBase.equalsIgnoreCase(base))
-                    || packedBase.equalsIgnoreCase("map" + mapIndex)) {
-                mImage image = pack.loadImage(packedName);
-                if (image != null && image.image != null) {
-                    return image;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static String baseName(String value) {
-        if (value == null) {
-            return "";
-        }
-        int slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
-        return slash >= 0 ? value.substring(slash + 1) : value;
-    }
-
-    private static String stripPng(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.toLowerCase().endsWith(".png")
-                ? value.substring(0, value.length() - 4) : value;
-    }
-
-    private static String safeMapFileName(int index) {
-        if (MM.mapFileName != null && index >= 0 && index < MM.mapFileName.length) {
-            String name = MM.mapFileName[index];
-            if (name != null && !name.trim().isEmpty() && !"null".equalsIgnoreCase(name.trim())) {
-                return name.trim();
-            }
-        }
-        return "map" + index;
-    }
-
-    private static String safeMapName(int index) {
-        if (MM.mapName != null && index >= 0 && index < MM.mapName.length) {
-            String name = MM.mapName[index];
-            if (name != null && !name.trim().isEmpty() && !"null".equalsIgnoreCase(name.trim())) {
-                return name.trim();
-            }
-        }
-        return "Map " + (index + 1);
-    }
-
-    private static void ensureMapName(int index) {
-        if (MM.mapName != null && index >= 0 && index < MM.mapName.length) {
-            MM.mapName[index] = safeMapName(index);
-        }
-        if (MM.mapFileName != null && index >= 0 && index < MM.mapFileName.length) {
-            MM.mapFileName[index] = safeMapFileName(index);
-        }
     }
 
     public void getPlayerIcon(short clanID, mImage icon) {
@@ -1178,7 +1029,7 @@ public class PrepareScr extends CScreen {
             if (CCanvas.width <= 300) {
                 Font.borderFont.drawString(g, Language.room() + ": " + currentRoom, CCanvas.hw, 10, 2);
                 Font.borderFont.drawString(g, BoardListScr.boardName, CCanvas.hw, 25, 2);
-                Font.borderFont.drawString(g, curMap + 1 + ". " + safeMapName(curMap), CCanvas.hw, 40, 2);
+                Font.borderFont.drawString(g, curMap + 1 + ". " + MM.mapName[curMap], CCanvas.hw, 40, 2);
                 isPaint = false;
             } else {
                 isPaint = true;
@@ -1186,7 +1037,7 @@ public class PrepareScr extends CScreen {
                 g.fillRect(CCanvas.hw - 88, 13, 76, 46, false);
                 Font.borderFont.drawString(g, Language.room() + ": " + currentRoom, CCanvas.hw, 12, 0);
                 Font.borderFont.drawString(g, BoardListScr.boardName, CCanvas.hw, 27, 0);
-                Font.borderFont.drawString(g, curMap + 1 + ". " + safeMapName(curMap), CCanvas.hw, 42, 0);
+                Font.borderFont.drawString(g, curMap + 1 + ". " + MM.mapName[curMap], CCanvas.hw, 42, 0);
                 this.xPaintMap = CCanvas.hw - 50;
                 this.yPaintMap = 36;
                 this.anchorPainMap = 3;
@@ -1211,32 +1062,22 @@ public class PrepareScr extends CScreen {
             g.fillRect(this.xPaintMap - 38, this.yPaintMap - 26 + 1, 76, this.yPaintMap + 10, false);
             Font.borderFont.drawString(g, Language.room() + ": " + currentRoom, this.xPaintMap, 85, 2);
             Font.borderFont.drawString(g, BoardListScr.boardName, this.xPaintMap, 100, 2);
-            Font.borderFont.drawString(g, curMap + 1 + ". " + safeMapName(curMap), this.xPaintMap, 70, 2);
+            Font.borderFont.drawString(g, curMap + 1 + ". " + MM.mapName[curMap], this.xPaintMap, 70, 2);
         }
 
         if (isPaint) {
             try {
-                int mapIndex = curMap & 255;
-                if (imgMap != null && mapIndex >= 0 && mapIndex < imgMap.length && imgMap[mapIndex] != null) {
-                    g.drawImage(imgMap[mapIndex], this.xPaintMap, this.yPaintMap, mGraphics.VCENTER | mGraphics.HCENTER, false);
-                } else if (randomMap != null && randomMap.image != null) {
-                    g.drawImage(randomMap, this.xPaintMap, this.yPaintMap, mGraphics.VCENTER | mGraphics.HCENTER, false);
+                if (imgMap[curMap] != null) {
+                    g.drawImage(imgMap[curMap], this.xPaintMap, this.yPaintMap, mGraphics.VCENTER | mGraphics.HCENTER, false);
                 }
             } catch (Exception var6) {
-                if (randomMap != null && randomMap.image != null) {
-                    g.drawImage(randomMap, this.xPaintMap, this.yPaintMap, mGraphics.VCENTER | mGraphics.HCENTER, false);
-                }
+                g.drawImage(randomMap, this.xPaintMap, this.yPaintMap, mGraphics.VCENTER | mGraphics.HCENTER, false);
             }
 
-            if (khungMap != null && khungMap.image != null) {
-                g.drawImage(khungMap, this.xPaintMap, this.yPaintMap, 3, false);
-            }
+            g.drawImage(khungMap, this.xPaintMap, this.yPaintMap, 3, false);
         }
 
         PlayerInfo m = TerrainMidlet.myInfo;
-        if (m == null) {
-            return;
-        }
         String money = CCanvas.width >= 200 ? m.getStrMoney() : m.getStrMoney2();
         Font.normalFont.drawString(g, "Lvl " + m.level2 + "  " + money, 6, CCanvas.hieght - cmdH - 35, 0, false);
         Font.normalFont.drawString(g, "Exp ", 6, CCanvas.hieght - cmdH - 19, 0, false);

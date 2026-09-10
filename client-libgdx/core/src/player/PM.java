@@ -54,40 +54,60 @@ public class PM {
     public void initPlayer(short[] pX, short[] pY, short[] maxHP) {
         this.playerCount = 0;
         this.allCount = 0;
-        int num = 8;
-        if (PrepareScr.currLevel == 7) {
-            num = NUMB_PLAYER;
+        if (p == null || pX == null || pY == null || maxHP == null || CCanvas.prepareScr == null ||
+                CCanvas.prepareScr.playerInfos == null) {
+            CRes.err("initPlayer: missing battle/player data");
+            return;
         }
+
+        int requested = PrepareScr.currLevel == 7 ? NUMB_PLAYER : 8;
+        int num = Math.min(requested, Math.min(p.length, Math.min(pX.length, Math.min(pY.length, maxHP.length))));
 
         int i;
         for (i = 0; i < num; ++i) {
             p[i] = null;
             if (pX[i] != -1) {
-                PlayerInfo pi = (PlayerInfo) CCanvas.prepareScr.playerInfos.elementAt(i);
-                boolean isCom = TerrainMidlet.myInfo.IDDB != pi.IDDB;
-                if (!pi.isBoss) {
-                    p[i] = new CPlayer(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, pi.myEquip, maxHP[i]);
-                    p[i].clanIcon = pi.clanIcon;
-                    p[i].equip = pi.myEquip;
-                } else {
-                    p[i] = new Boss(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, maxHP[i]);
+                if (i >= CCanvas.prepareScr.playerInfos.size()) {
+                    CRes.err("initPlayer: missing PlayerInfo at seat " + i);
+                    continue;
                 }
+                PlayerInfo pi = (PlayerInfo) CCanvas.prepareScr.playerInfos.elementAt(i);
+                if (pi == null) {
+                    continue;
+                }
+                if (pi.myEquip == null) {
+                    pi.getMyEquip(9);
+                }
+                boolean isCom = TerrainMidlet.myInfo == null || TerrainMidlet.myInfo.IDDB != pi.IDDB;
+                try {
+                    if (!pi.isBoss) {
+                        p[i] = new CPlayer(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, pi.myEquip, maxHP[i]);
+                        p[i].clanIcon = pi.clanIcon;
+                        p[i].equip = pi.myEquip;
+                    } else {
+                        p[i] = new Boss(pi.IDDB, (byte) i, pX[i], pY[i], isCom, i % 2 == 0 ? 2 : 0, pi.gun, maxHP[i]);
+                    }
 
-                p[i].name = pi.name;
-                p[i].nQuanHam = pi.nQuanHam2;
-                p[i].maxhp = maxHP[i];
-                if (!isCom) {
-                    p[i].item = CCanvas.prepareScr.copyItemCurrent();
-                    GameScr.myIndex = (byte) i;
+                    p[i].name = pi.name;
+                    p[i].nQuanHam = pi.nQuanHam2;
+                    p[i].maxhp = maxHP[i];
+                    if (!isCom) {
+                        p[i].item = CCanvas.prepareScr.copyItemCurrent();
+                        GameScr.myIndex = (byte) i;
+                    }
+                } catch (RuntimeException ex) {
+                    CRes.err("initPlayer seat " + i + " failed: " + ex);
+                    p[i] = null;
                 }
             }
 
-            ++this.playerCount;
         }
 
-        this.allCount = this.playerCount;
+        this.playerCount = num;
+        this.allCount = num;
 
-        for (i = 0; i < num; npNumSend[i] = i++) {
+        int sendCount = Math.min(num, Math.min(npNumSend.length, Math.min(npXsend.length, npYsend.length)));
+        for (i = 0; i < sendCount; npNumSend[i] = i++) {
             npXsend[i] = -1;
             npYsend[i] = -1;
         }
@@ -95,8 +115,11 @@ public class PM {
     }
 
     public String getPlayerNameFromID(int id) {
+        if (p == null) {
+            return "";
+        }
         for (int i = 0; i < p.length; ++i) {
-            if (p[i].IDDB == id) {
+            if (p[i] != null && p[i].IDDB == id) {
                 return p[i].name;
             }
         }

@@ -377,7 +377,7 @@ public class CPlayer {
 
         this.team = this.index % 2 == 0;
         if (equip != null) {
-            this.idBullet = equip.equips[0].bullet;
+            this.idBullet = equip.getBulletIdOrDefault();
         }
 
         if (this.gun == 3) {
@@ -673,9 +673,6 @@ public class CPlayer {
     }
 
     public void angleReset() {
-        if (ModSettings.angle360) {
-            return;
-        }
         if (this.gun <= 9) {
             if (this.gun != 15) {
                 if (this.gun != 17) {
@@ -693,27 +690,28 @@ public class CPlayer {
     }
 
     public void checkNomarShoot() {
-        if (ModSettings.angle360) {
-            this.angle = ModSettings.normalize360(this.angle);
+        // Exact V10 normal-shot limits. The network/gameplay angle must stay inside
+        // the original left/right hemispheres; 360-degree display is HUD-only.
+        if (this.gun < 0 || this.gun >= angleLock.length) {
             return;
         }
-        if (this.look == 0 && this.angle > 180 - angleLock[this.gun]) {
-            this.angle = 180 - angleLock[this.gun];
+        if (this.look == 0) {
+            int max = 180 - angleLock[this.gun];
+            if (this.angle > max) {
+                this.angle = max;
+            }
+            if (this.angle < 91) {
+                this.angle = 91;
+            }
         }
-
         if (this.look == 2) {
             if (this.angle < angleLock[this.gun]) {
                 this.angle = angleLock[this.gun];
             }
-
-            if (this.angle > 270) {
-                this.angle -= 360;
-                if (CRes.abs(this.angle) > CRes.abs(angleLock[this.gun])) {
-                    this.angle = angleLock[this.gun];
-                }
+            if (this.angle > 89) {
+                this.angle = 89;
             }
         }
-
     }
 
     public void angleUpdate() {
@@ -851,12 +849,6 @@ public class CPlayer {
     public void holdFire() {
         CCanvas.keyPressed[12] = false;
         CCanvas.keyPressed[13] = false;
-        // V10 2.3.0 uses two configurable power caps: O for the primary
-        // charge and P for the second charge of double-power weapons.
-        // Keep the legacy field in sync because other inherited code may read it.
-        this.maxforce = ModSettings.maxForce;
-        int primaryMaxForce = ModSettings.maxForce;
-        int secondMaxForce = ModSettings.secondMaxForce;
         if (this.state != 3 && this.force > 1) {
             this.setState((byte) 3);
             this.bulletType = Bullet.setBulletType(this.gun);
@@ -871,7 +863,7 @@ public class CPlayer {
             GameScr.time.stop();
         } else if (!this.isDoublePower) {
             ++this.force;
-            if (this.force >= primaryMaxForce) {
+            if (this.force >= this.maxforce) {
                 this.shoot();
                 if (Bullet.isDoubleBull(this.bulletType)) {
                     this.isDoublePower = true;
@@ -882,12 +874,12 @@ public class CPlayer {
             }
         } else if (!this.isSecondPower) {
             ++this.force;
-            if (this.force >= primaryMaxForce) {
+            if (this.force >= this.maxforce) {
                 this.isSecondPower = true;
             }
         } else {
             ++this.force_2;
-            if (this.force_2 >= secondMaxForce) {
+            if (this.force_2 >= this.maxforce) {
                 this.shoot();
                 this.isSecondPower = false;
                 GameScr.clearKey();
@@ -1037,7 +1029,8 @@ public class CPlayer {
         this.angle = angle;
         this.checkAngleForSprite();
         CRes.out("name char shoot| " + this.name + "/" + angle + "/curFame " + this.curFrame);
-        GameScr.bm.setBullType(critical, whoShoot, _bullType, _x, _y, _numShoot, force2, _xHit, _yHit, this.equip != null ? this.equip.equips[0].bullet : 0);
+        int equippedBullet = this.equip != null ? this.equip.getBulletIdOrDefault() : 0;
+        GameScr.bm.setBullType(critical, whoShoot, _bullType, _x, _y, _numShoot, force2, _xHit, _yHit, equippedBullet);
         this.setState((byte) 4);
         if (_bullType == 35) {
             this.isBum = true;
@@ -1265,7 +1258,6 @@ public class CPlayer {
                 this.paintCup(g);
                 if (GameScr.pm.isYourTurn() && GameScr.myIndex == this.index && this.state != 8) {
                     this.paintCrosshair(g);
-                    this.paintV10AimGuide(g);
                 }
 
                 if (CCanvas.isDebugging()) {
@@ -1364,9 +1356,9 @@ public class CPlayer {
                             if (this.gun != 22) {
                                 if (this.gun != 23 && this.gun != 24) {
                                     if (PrepareScr.currLevel != 7 || PrepareScr.currLevel == 7 && this.state != 5 && this.hp != 0) {
-                                        if (this.equip != null) {
+                                        if (this.equip != null && this.equip.hasBaseGun()) {
                                             this.equip.paint(g, Look, this.curFrame, this.x, this.y);
-                                        } else {
+                                        } else if (this.pFrameImg != null) {
                                             this.pFrameImg.drawFrame(this.curFrame, this.x, this.y, Look, 33, g);
                                         }
                                     }
@@ -1406,7 +1398,12 @@ public class CPlayer {
 
     private void paintCrosshair(mGraphics g) {
         if (!(this instanceof Boss)) {
-            g.drawImage(crosshair, this.x + this.dx, this.y - this.dy - 11, mGraphics.HCENTER | mGraphics.VCENTER, false);
+            if (ModSettings.showAimHud) {
+                this.paintV10Trajectory(g);
+            }
+            if (crosshair != null && crosshair.image != null) {
+                g.drawImage(crosshair, this.x + this.dx, this.y - this.dy - 11, mGraphics.HCENTER | mGraphics.VCENTER, false);
+            }
             if (CCanvas.isDebugging()) {
                 String param = "a " + this.angle;
                 Font.smallFont.drawString(g, param, this.x + this.dx + 5, this.y - this.dy - 11 + 5, 2, false);
@@ -1420,25 +1417,23 @@ public class CPlayer {
         }
     }
 
-
     /**
-     * Army2 2.3.0 V10 trajectory renderer recovered from jg.c(Graphics).
-     * It intentionally mirrors the original integer/fixed-point simulation:
-     * initial speed comes from V10 O (maxForce), wind is scaled per gun/item,
-     * gravity is accumulated in hundredths, and bi/bj control frame drawing.
+     * V10-style aim trajectory preview for the normal 0..9 characters.
+     * This mirrors the reference client's preview physics: full 30-force vector,
+     * per-character wind/gravity scaling, and special spread/bounce previews.
+     * It is visual-only and never changes the angle or FIRE packet.
      */
-    private void paintV10AimGuide(mGraphics g) {
-        if (!ModSettings.drawAimGuide || this.gun > 9 || this.state == 5 || this.hp <= 0) {
+    private void paintV10Trajectory(mGraphics g) {
+        if (this.gun < 0 || this.gun > 9 || this.state == 5) {
             return;
         }
 
-        int startX = this.x + (20 * CRes.cos(this.angle) >> 10);
-        int startY = this.y - 12 - (20 * CRes.sin(this.angle) >> 10);
-        int vx = ModSettings.maxForce * CRes.cos(this.angle) >> 10;
-        int vy = -(ModSettings.maxForce * CRes.sin(this.angle) >> 10);
+        final int fullForce = 30;
+        int startX = this.x + ((20 * CRes.cos(this.angle)) >> 10);
+        int startY = this.y - 12 - ((20 * CRes.sin(this.angle)) >> 10);
+        int vx = (fullForce * CRes.cos(this.angle)) >> 10;
+        int vy = -((fullForce * CRes.sin(this.angle)) >> 10);
 
-        // V10 first switches on the active item. Unsupported item ids fall back
-        // to the normal gun trajectory, exactly like the original tableswitch.
         if (this.isUsedItem) {
             switch (this.itemUsed) {
                 case 1:
@@ -1446,64 +1441,68 @@ public class CPlayer {
                     return;
                 case 6:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 70), scaledWind(GameScr.windy, 70), 90, 16711680);
+                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 90, 16711680);
                     return;
                 case 7:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 70), scaledWind(GameScr.windy, 70), 80, 16711680);
+                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 80, 16711680);
                     return;
                 case 8:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 80, 16711680);
                     return;
                 case 9:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 70), scaledWind(GameScr.windy, 70), 70, 16776960);
+                            GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 70, 16776960);
                     return;
                 case 11:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 100, 16711680);
                     return;
                 case 16:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 10), scaledWind(GameScr.windy, 10), 50, 16711680);
+                            GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 50, 16711680);
                     return;
                 case 17:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 50), scaledWind(GameScr.windy, 50), 120, 16776960);
-                    return;
-                case 18:
-                case 23:
+                            GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 120, 16776960);
                     return;
                 case 19:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 30), scaledWind(GameScr.windy, 30), 60, 16776960);
+                            GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 60, 16776960);
                     return;
                 case 20:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, -50, 16711680);
                     return;
                 case 21:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 20), scaledWind(GameScr.windy, 20), 100, 16776960);
+                            GameScr.windx * 20 / 100, GameScr.windy * 20 / 100, 100, 16776960);
                     return;
                 case 22:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy / 2, 0, 0, 20, 16776960);
                     return;
                 case 25:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 5), scaledWind(GameScr.windy, 5), 60, 16776960);
+                            GameScr.windx * 5 / 100, GameScr.windy * 5 / 100, 60, 16776960);
                     return;
                 case 26:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 10), scaledWind(GameScr.windy, 10), 100, 16711680);
+                            GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 100, 16711680);
                     return;
                 case 28:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 80, 16776960);
                     return;
                 case 29:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                            scaledWind(GameScr.windx, 6), scaledWind(GameScr.windy, 6), 60, 16776960);
+                            GameScr.windx * 6 / 100, GameScr.windy * 6 / 100, 60, 16776960);
                     return;
                 case 30:
-                    drawV10Spread(g, this.angle - 5, 3, 5, 0, 70, 16776960, 70);
+                    for (int i = 0, a = this.angle - 5; i < 3; i++, a += 5) {
+                        int sx = this.x + ((20 * CRes.cos(a)) >> 10);
+                        int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
+                        int svx = (fullForce * CRes.cos(a)) >> 10;
+                        int svy = -((fullForce * CRes.sin(a)) >> 10);
+                        drawV10Trajectory(g, 0, sx, sy, svx, svy,
+                                GameScr.windx * 70 / 100, GameScr.windy * 70 / 100, 70, 16776960);
+                    }
                     return;
                 case 31:
                     drawV10Trajectory(g, 0, startX, startY, vx, vy, 0, 0, 120, 16776960);
@@ -1514,178 +1513,160 @@ public class CPlayer {
         }
 
         switch (this.gun) {
-            case GUN_CANNON:
+            case 0:
                 drawV10Trajectory(g, 0, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 80), scaledWind(GameScr.windy, 80), 100, 255);
+                        GameScr.windx * 80 / 100, GameScr.windy * 80 / 100, 100, 255);
                 break;
-            case GUN_AK:
+            case 1:
                 drawV10Trajectory(g, 1, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 50), scaledWind(GameScr.windy, 50), 50, 255);
+                        GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 50, 255);
                 break;
-            case GUN_PROTON:
-                drawV10Spread(g, this.angle - 5, 3, 5, 2, 60, 255, 80);
+            case 2:
+                for (int i = 0, a = this.angle - 5; i < 3; i++, a += 5) {
+                    int sx = this.x + ((20 * CRes.cos(a)) >> 10);
+                    int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
+                    int svx = (fullForce * CRes.cos(a)) >> 10;
+                    int svy = -((fullForce * CRes.sin(a)) >> 10);
+                    drawV10Trajectory(g, 2, sx, sy, svx, svy,
+                            GameScr.windx * 80 / 100, GameScr.windy * 80 / 100, 60, 255);
+                }
                 break;
-            case GUN_CHUOI:
-                drawV10Spread(g, this.angle - 6, 4, 4, 3, 90, 255, 40);
+            case 3:
+                for (int i = 0, a = this.angle - 6; i < 4; i++, a += 4) {
+                    int sx = this.x + ((20 * CRes.cos(a)) >> 10);
+                    int sy = this.y - 12 - ((20 * CRes.sin(a)) >> 10);
+                    int svx = (fullForce * CRes.cos(a)) >> 10;
+                    int svy = -((fullForce * CRes.sin(a)) >> 10);
+                    drawV10Trajectory(g, 3, sx, sy, svx, svy,
+                            GameScr.windx * 40 / 100, GameScr.windy * 40 / 100, 90, 255);
+                }
                 break;
-            case GUN_ROCKET:
+            case 4:
                 drawV10Trajectory(g, 4, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 50), scaledWind(GameScr.windy, 50), 80, 255);
+                        GameScr.windx * 50 / 100, GameScr.windy * 50 / 100, 80, 255);
                 break;
-            case GUN_MORTAR:
+            case 5:
                 drawV10Trajectory(g, 5, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 30), scaledWind(GameScr.windy, 30), 90, 255);
+                        GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 90, 255);
                 break;
-            case GUN_CHICKEN:
+            case 6:
                 drawV10Trajectory(g, 6, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 20), scaledWind(GameScr.windy, 20), 50, 255);
+                        GameScr.windx * 20 / 100, GameScr.windy * 20 / 100, 50, 255);
                 break;
-            case GUN_BOOMERANG:
+            case 7:
                 drawV10Trajectory(g, 7, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 10), scaledWind(GameScr.windy, 10), 50, 255);
+                        GameScr.windx * 10 / 100, GameScr.windy * 10 / 100, 50, 255);
                 break;
-            case GUN_HAMMER:
+            case 8:
                 drawV10Trajectory(g, 8, startX, startY, vx, vy,
-                        scaledWind(GameScr.windx, 30), scaledWind(GameScr.windy, 30), 100, 255);
+                        GameScr.windx * 30 / 100, GameScr.windy * 30 / 100, 100, 255);
                 break;
-            case GUN_LASER_GIRL:
-                // The original V10 increases initial speed by five in the normal
-                // (non-training) path. This desktop port has no equivalent of the
-                // old bv.am training flag here, so use the normal battle value.
-                int laserForce = ModSettings.maxForce + (GameScr.trainingMode ? 0 : 5);
-                int laserVx = laserForce * CRes.cos(this.angle) >> 10;
-                int laserVy = -(laserForce * CRes.sin(this.angle) >> 10);
-                drawV10Trajectory(g, 9, startX, startY, laserVx, laserVy,
-                        scaledWind(GameScr.windx, 40), scaledWind(GameScr.windy, 40), 70, 255);
+            case 9:
+                drawV10Trajectory(g, 9, startX, startY, vx, vy,
+                        GameScr.windx * 40 / 100, GameScr.windy * 40 / 100, 70, 255);
                 break;
             default:
                 break;
         }
     }
 
-    private static int scaledWind(int value, int percent) {
-        return value * percent / 100;
-    }
-
-    private void drawV10Spread(mGraphics g, int firstAngle, int count, int angleStep,
-                               int mode, int gravity, int color, int windPercent) {
-        for (int i = 0, angleNow = firstAngle; i < count; ++i, angleNow += angleStep) {
-            int sx = this.x + (20 * CRes.cos(angleNow) >> 10);
-            int sy = this.y - 12 - (20 * CRes.sin(angleNow) >> 10);
-            int vx = ModSettings.maxForce * CRes.cos(angleNow) >> 10;
-            int vy = -(ModSettings.maxForce * CRes.sin(angleNow) >> 10);
-            drawV10Trajectory(g, mode, sx, sy, vx, vy,
-                    scaledWind(GameScr.windx, windPercent), scaledWind(GameScr.windy, windPercent),
-                    gravity, color);
-        }
-    }
-
-    /** Exact integer stepping of V10 jg.a(Graphics, ...). */
-    private void drawV10Trajectory(mGraphics g, int mode, int startX, int startY,
-                                   int vx, int vy, int ax, int ay, int gravity, int color) {
+    private void drawV10Trajectory(mGraphics g, int type, int startX, int startY,
+                                   int vx, int vy, int windX, int windY,
+                                   int gravity, int color) {
         int x = startX;
         int y = startY;
-        g.setColor(color);
+        int remX = 0;
+        int remY = 0;
+        int remG = 0;
         boolean movingLeft = vx <= 0;
         int phase = -1;
-        int fracX = 0;
-        int fracY = 0;
-        int fracGravity = 0;
-        int frame = 1;
-        int safety = 0;
+        int step = 1;
 
-        while ((ModSettings.aimFrameMax < 0 || frame < ModSettings.aimFrameMax) && safety++ < 3000) {
-            int nextX = x + vx;
-            int nextY = y + vy;
-            g.drawLine(x, y, nextX, nextY, false);
+        // V10 normally runs until the projectile leaves its map/screen bounds. Keep
+        // the same physics but retain a hard cap so corrupted map dimensions cannot
+        // freeze the LibGDX render thread.
+        while (step <= 600) {
+            int nx = x + vx;
+            int ny = y + vy;
+            g.setColor(color);
+            g.drawLine(x, y, nx, ny, false);
 
-            if ((mode == 6 || mode == 8) && frame > 1 && frame <= 31
-                    && frame % Math.max(1, ModSettings.aimFrameStep) == 0) {
-                int frameIndex = frame - 1;
-                int oldColor = color;
-                if (frameIndex == ModSettings.secondMaxForce) {
-                    Font.smallFont.drawString(g, String.valueOf(frameIndex), x, y + 5, 65, false);
-                } else {
-                    Font.smallFont.drawString(g, String.valueOf(frameIndex), x, y + 5, 65, false);
-                }
-                g.setColor(oldColor);
+            remX += windX;
+            remY += windY;
+            remG += gravity;
+            if (Math.abs(remX) >= 100) {
+                vx += remX / 100;
+                remX %= 100;
             }
-
-            fracX += ax;
-            fracY += ay;
-            fracGravity += gravity;
-            if (Math.abs(fracX) >= 100) {
-                vx += fracX / 100;
-                fracX %= 100;
+            if (Math.abs(remY) >= 100) {
+                vy += remY / 100;
+                remY %= 100;
             }
-            if (Math.abs(fracY) >= 100) {
-                vy += fracY / 100;
-                fracY %= 100;
-            }
-            if (Math.abs(fracGravity) >= 100) {
-                vy += fracGravity / 100;
-                fracGravity %= 100;
+            if (Math.abs(remG) >= 100) {
+                vy += remG / 100;
+                remG %= 100;
             }
 
-            if (vy > 0 && nextY > Camera.y + CCanvas.hieght) {
-                return;
-            }
-            if (nextX < -100 || nextX > MM.mapWidth + 100) {
+            if ((vy > 0 && ny > MM.mapHeight + CCanvas.hieght) ||
+                    nx < -100 || nx > MM.mapWidth + 100) {
                 return;
             }
 
-            if (mode == 6) {
-                if (frame == ModSettings.secondMaxForce) {
-                    // V10 jg.a(mode 6): the spawned branch starts with zero
-                    // velocity and inherits half of the trajectory acceleration.
-                    drawV10Trajectory(g, 0, nextX, nextY + 8, 0, 0,
-                            ax / 2, ay / 2, 30, 16776960);
-                }
-                g.setColor(color);
-            } else if (mode == 7) {
+            // Exact V10 gun-6 preview: at force step 30, spawn the secondary drop
+            // path using half wind and gravity 30, while the main path continues.
+            if (type == 6 && step == 30) {
+                drawV10Trajectory(g, 0, nx, ny + 8, 0, 0,
+                        windX / 2, windY / 2, 30, 16776960);
+            } else if (type == 7) {
+                // V10 boomerang phase: wait until the shot is descending, then bend
+                // once by 1 px/tick and subsequently by 2 px/tick toward the shooter.
                 if (phase == 0) {
                     vx += movingLeft ? 1 : -1;
-                    phase = (byte)(phase + 1);
+                    phase = 1;
                 } else if (phase > 0) {
                     vx += movingLeft ? 2 : -2;
                 } else if (vy > 0) {
-                    phase = (byte)(phase + 1);
+                    ++phase; // -1 -> 0
                 }
-            } else if (mode == 8 && frame == ModSettings.secondMaxForce) {
-                int a = this.angle + CRes.fixangle(CRes.angle(this.x - x, this.y - y));
+            } else if (type == 8 && step == 30) {
+                // V10 gun-8 fans three half-force paths exactly at force step 30.
+                int reboundAngle = this.angle + CRes.fixangle(CRes.angle(this.x - x, this.y - y));
                 if (this.angle < 90) {
-                    a = 180 - a;
+                    reboundAngle = 180 - reboundAngle;
                 }
-                a -= 15;
-                for (int i = 0; i < 3; ++i, a += 15) {
-                    int sx = x + (20 * CRes.cos(a) >> 10);
-                    int sy = y - 12 - (20 * CRes.sin(a) >> 10);
-                    int branchVx = ModSettings.maxForce * CRes.cos(a) >> 11;
-                    int branchVy = -(ModSettings.maxForce * CRes.sin(a) >> 11);
-                    drawV10Trajectory(g, 0, sx, sy, branchVx, branchVy, ax, ay, gravity, 16776960);
+                reboundAngle -= 15;
+                for (int i = 0; i < 3; ++i, reboundAngle += 15) {
+                    int sx = x + ((20 * CRes.cos(reboundAngle)) >> 10);
+                    int sy = y - 12 - ((20 * CRes.sin(reboundAngle)) >> 10);
+                    int rvx = (30 * CRes.cos(reboundAngle)) >> 11;
+                    int rvy = -((30 * CRes.sin(reboundAngle)) >> 11);
+                    drawV10Trajectory(g, 0, sx, sy, rvx, rvy,
+                            windX, windY, gravity, 16776960);
                 }
                 return;
-            } else if (mode == 9 && phase < 0 && vy >= 0) {
-                int a = CRes.angle(nextX - startX, startY - nextY);
-                vx = ModSettings.maxForce * CRes.cos(a) >> 10;
-                vy = ModSettings.maxForce * CRes.sin(a) >> 10;
+            } else if (type == 9 && phase < 0 && vy >= 0) {
+                // V10 gun-9 redirects once at the vertical turning point and then
+                // flies without wind/gravity; its redirected segment is red.
+                int a = CRes.angle(nx - startX, startY - ny);
+                vx = (30 * CRes.cos(a)) >> 10;
+                vy = (30 * CRes.sin(a)) >> 10;
                 while (vx != 0 && Math.abs(vx) < 15) {
                     vx += vx;
                     vy += vy;
                 }
-                ax = 0;
-                ay = 0;
+                windX = 0;
+                windY = 0;
                 gravity = 0;
-                fracX = 0;
-                fracY = 0;
-                fracGravity = 0;
-                g.setColor(0xFFFF0000);
+                remX = 0;
+                remY = 0;
+                remG = 0;
+                color = 16711680;
                 phase = 0;
             }
 
-            ++frame;
-            x = nextX;
-            y = nextY;
+            x = nx;
+            y = ny;
+            ++step;
         }
     }
 
@@ -1711,10 +1692,6 @@ public class CPlayer {
                     g.fillRect(this.x - 15, this.y + 5 - dy, this.hpRectW, 4, false);
                     g.setColor(0);
                     g.drawRect(this.x - 15, this.y + 5 - dy, 25, 4, false);
-                    if (ModSettings.drawHp) {
-                        Font.smallFont.drawString(g, "HP:" + this.hp + "/" + this.maxhp,
-                                this.x, this.y + 5 - dy - 23, 2, false);
-                    }
                 }
 
             }
@@ -2120,14 +2097,9 @@ public class CPlayer {
         if (this.state == 3) {
             return;
         }
-        if (ModSettings.angle360) {
-            this.angle += this.look == 0 ? -1 : 1;
-            this.angle = ModSettings.normalize360(this.angle);
-        } else if (this.look == 0) {
-            this.angle = Math.max(90, this.angle - 1);
-        } else {
-            this.angle = Math.min(90, this.angle + 1);
-        }
+        // V10: UP moves the barrel upward on screen, which is angle-- when facing
+        // left and angle++ when facing right. Clamp through angleUpdate().
+        this.angle += this.look == 0 ? -1 : 1;
         this.angleUpdate();
         this.checkAngleForSprite();
     }
@@ -2136,14 +2108,7 @@ public class CPlayer {
         if (this.state == 3) {
             return;
         }
-        if (ModSettings.angle360) {
-            this.angle += this.look == 0 ? 1 : -1;
-            this.angle = ModSettings.normalize360(this.angle);
-        } else if (this.look == 0) {
-            this.angle = Math.min(180 - angleLock[this.gun], this.angle + 1);
-        } else {
-            this.angle = Math.max(angleLock[this.gun], this.angle - 1);
-        }
+        this.angle += this.look == 0 ? 1 : -1;
         this.angleUpdate();
         this.checkAngleForSprite();
     }
@@ -2502,18 +2467,6 @@ public class CPlayer {
                                 int dy = this.y - yScreen - Camera.y;
                                 int a = CRes.angle(-dx, dy);
                                 CRes.out("a Trc = " + a);
-                                if (!ModSettings.angle360) {
-                                    if (this.look == 2 && a < angleLock[this.gun]) {
-                                        a = angleLock[this.gun];
-                                    }
-
-                                    if (this.look == 0 && a > 180 - angleLock[this.gun]) {
-                                        a = 180 - angleLock[this.gun];
-                                    }
-                                } else {
-                                    a = ModSettings.normalize360(a);
-                                }
-
                                 this.angle = a;
                                 this.angleUpdate();
                                 this.checkAngleForSprite();
