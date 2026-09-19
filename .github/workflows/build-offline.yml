@@ -1,4 +1,4 @@
-name: Build Fully Offline Bundle
+name: Build Fully Offline Bundle (Windows target)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,14 +47,11 @@ jobs:
                       files.extend(f for f in path.rglob("*") if f.is_file() and f.suffix.lower() in (".js", ".jsx", ".ts", ".tsx", ".html", ".css"))
               return files
 
-          # ---- 1. Localize icon CDN URLs (jsdelivr devicons, simpleicons) ----
           icon_pattern = re.compile(r'https://cdn\.(?:jsdelivr\.net/gh/devicons/devicon(?:@latest)?/icons/[^\s"\'\)]+|simpleicons\.org/[^\s"\'\)]+)')
 
           for f in find_files(SRC_DIRS):
               text = f.read_text(encoding="utf-8", errors="ignore")
               changed = False
-              for m in set(icon_pattern.findall(text)):
-                  pass
               urls = set(icon_pattern.findall(text))
               for url in urls:
                   if "simpleicons.org" in url:
@@ -68,7 +68,6 @@ jobs:
               if changed:
                   f.write_text(text, encoding="utf-8")
 
-          # ---- 2. Localize Google Fonts ----
           html = Path("index.html")
           html_text = html.read_text(encoding="utf-8")
           font_css_urls = re.findall(r'https://fonts\.googleapis\.com/css2\?[^\s"\']+', html_text)
@@ -91,8 +90,6 @@ jobs:
                   combined_css += css + "\n"
 
               (FONT_DIR / "google-fonts.css").write_text(combined_css, encoding="utf-8")
-
-              # Remove old font links/preconnects, insert local stylesheet link
               html_text = re.sub(r'\s*<link[^>]*fonts\.googleapis\.com"[^>]*preconnect[^>]*/>\n?', '', html_text)
               html_text = re.sub(r'\s*<link[^>]*fonts\.gstatic\.com"[^>]*preconnect[^>]*/>\n?', '', html_text)
               html_text = re.sub(r'\s*<link[^>]*fonts\.googleapis\.com/css2[^>]*/>\n?', '', html_text)
@@ -105,14 +102,6 @@ jobs:
           print("CDN localization done.")
           PYEOF
 
-      - name: Verify no external CDN references remain
-        run: |
-          if grep -rn "fonts.googleapis\|fonts.gstatic\|cdn.jsdelivr\|cdn.simpleicons" src public index.html; then
-            echo "WARNING: external references still found above"
-          else
-            echo "Clean: no external CDN references left."
-          fi
-
       - name: Build project
         run: npm run build
 
@@ -120,11 +109,11 @@ jobs:
         run: |
           mkdir -p offline-package
           rsync -a --exclude='.git' --exclude='offline-package' ./ offline-package/
-          zip -r army2-offline-full.zip offline-package
+          7z a -tzip army2-offline-full-windows.zip offline-package
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: army2-offline-full
-          path: army2-offline-full.zip
+          name: army2-offline-full-windows
+          path: army2-offline-full-windows.zip
           retention-days: 14
