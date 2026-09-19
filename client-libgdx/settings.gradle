@@ -1,2 +1,0 @@
-rootProject.name = 'MobiArmy2-LibGDX-Hybrid'
-include 'core', 'desktop'
