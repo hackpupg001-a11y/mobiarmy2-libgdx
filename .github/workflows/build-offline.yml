@@ -105,10 +105,12 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Package fully offline bundle (source + node_modules + dist)
+- name: Package fully offline bundle (source + node_modules + dist)
+        shell: powershell
         run: |
-          mkdir -p offline-package
-          rsync -a --exclude='.git' --exclude='offline-package' ./ offline-package/
+          New-Item -ItemType Directory -Force -Path offline-package
+          robocopy . offline-package /E /XD .git offline-package
+          if ($LASTEXITCODE -le 7) { $global:LASTEXITCODE = 0 }
           7z a -tzip army2-offline-full-windows.zip offline-package
 
       - name: Upload artifact
