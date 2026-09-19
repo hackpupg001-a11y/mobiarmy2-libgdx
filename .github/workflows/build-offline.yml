@@ -1,0 +1,37 @@
+name: Build Offline Bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Package full offline bundle (source + node_modules + dist)
+        run: |
+          mkdir -p offline-package
+          rsync -a --exclude='.git' --exclude='offline-package' ./ offline-package/
+          tar -czf army2-offline-full.tar.gz offline-package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: army2-offline-full
+          path: army2-offline-full.tar.gz
+          retention-days: 14
